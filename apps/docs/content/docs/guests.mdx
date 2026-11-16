@@ -50,7 +50,7 @@ a fix for a broken build is held to the same `memberPaths` and `memberCheck` as 
 
 ## this site does exactly this
 
-the "yours to change" windows are files in `apps/docs/playground`, loaded by `apps/docs/components/playground.tsx` with `next/dynamic` and `ssr: false` inside an error boundary, so breaking yours doesn't take the card down. the config is [`computah.docs.config.mjs`](https://github.com/tetraslam/computah/blob/main/computah.docs.config.mjs) at the repo root:
+the "yours to change" windows are files in `apps/docs/playground`, loaded by `apps/docs/components/playground.tsx` with `next/dynamic` and `ssr: false` inside an error boundary, so breaking yours doesn't take the card down. the config is [`computah.docs.config.mjs`](https://github.com/tetraslam/computah/blob/master/computah.docs.config.mjs) at the repo root:
 
 ```js title="computah.docs.config.mjs"
 guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000 } : undefined,
