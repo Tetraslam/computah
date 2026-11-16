@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <title>computah</title>
   <!-- the improvements box at 16 pixels: a window, its striped title bar, one field, a hard edge -->
   <rect x="2" y="3" width="13" height="11" fill="#000"/>
   <rect x="1" y="2" width="13" height="11" fill="#000"/>
