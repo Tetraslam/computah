@@ -122,6 +122,8 @@ How a change reaches people:
 
 Each person's version is a git branch (`computah/u/<name>`); everyone's is `computah/main`. Personal copies start when their person shows up and stop when idle.
 
+When everyone's version changes, it is merged into each person's version. If the two changed the same lines, the agent settles it the next time that person shows up: it is told what they asked for and keeps both. If it can't, their version stays exactly as it was.
+
 ## An app on Vercel
 
 Vercel can't run the runner, so the runner lives on another machine with a clone of the repo, and pushes each change to GitHub for Vercel to build.
@@ -233,7 +235,6 @@ While the agent is in a sandbox there is no live preview: its changes arrive all
 - The Vercel adapter has run against a real Vercel project with a scripted agent: a production deploy, a preview for a member, and a failed build that was fixed. The app-side route has only run in tests.
 - Without a sandbox, a member's agent runs with the same access to the machine as an owner's. With one, the agent is contained, but the code it writes still runs on the serving machine once built.
 - The Modal sandbox has only run with a scripted agent. A real agent there needs a model key in a Modal Secret, which hasn't been tried.
-- When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.
 
 ## Develop
 

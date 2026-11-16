@@ -61,6 +61,8 @@ an owner's box lists other people's versions that have changes, with their reque
 
 everyone with the box sees requests to everyone's version plus their own, and owners see all of them. you can stop or undo your own, trusted people can also stop or undo anything in everyone's version (they could change it anyway), and owners can stop or undo anything. for people who aren't signed in, see [letting anyone change it](/guests)
 
-## what's not done
+## when yours and everyone's collide
 
-if someone's version conflicts with everyone's it gets marked behind ("yours is behind everyone's") and left alone, cause nothing resolves conflicts yet :(
+whenever everyone's version changes it gets merged into yours, and most of the time that's a normal git merge that nobody notices. if we both changed the same lines git can't decide, so your version gets marked behind and the next time you show up the agent sorts it out. it's told what you asked for and what changed in everyone's version and it's supposed to keep both, and you'll see it in your box as "catch up with everyone's version"
+
+if it can't manage it (or what it produces doesn't build) your version stays exactly how it was, and it tries again the next time everyone's version moves. i watched this work on this site with a real agent, my change and a guest's change to the same button, and the guest kept theirs :D
