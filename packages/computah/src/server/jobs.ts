@@ -30,6 +30,8 @@ export interface ComputahOptions {
    * On a problem the agent is shown it and asked to fix it; if it can't, the whole change is reverted.
    */
   verify?: (job: Job) => Promise<string | null>;
+  /** Called after a change that failed its check has been taken back out. */
+  onReverted?: (job: Job) => Promise<void>;
   /** How many times the agent may try to fix a failed check. Default 3. */
   repairs?: number;
 }
@@ -311,8 +313,15 @@ export class Computah {
     if (job.commit) job.commits = [job.commit];
     if (files.length && this.options.verify) {
       // Check the change. If the check fails, show the agent what went wrong and let it fix it, a few times.
-      let problem = await this.options.verify(job);
-      for (let attempt = 1; problem && attempt <= (this.options.repairs ?? 3) && !current.cancelled; attempt++) {
+      // A check that throws has hit something the agent can't fix: the change comes out without a repair attempt.
+      let fatal = "";
+      const check = () =>
+        this.options.verify?.(job).catch((error: unknown) => {
+          fatal = error instanceof Error ? error.message : String(error);
+          return fatal;
+        }) ?? Promise.resolve(null);
+      let problem = await check();
+      for (let attempt = 1; problem && !fatal && attempt <= (this.options.repairs ?? 3) && !current.cancelled; attempt++) {
         await this.emit(job.id, { type: "text", text: `It didn't build. Fixing it (try ${attempt}).` });
         const fix = this.options.agent.command(buildRepairPrompt(job.text, problem), this.root);
         const repaired = await this.runAgent(job, current, fix.command, fix.args, fix.stdin);
@@ -331,14 +340,17 @@ export class Computah {
           job.by?.name ?? job.by?.id,
         ).catch(() => undefined);
         if (commit) job.commits = [...(job.commits ?? []), commit];
-        problem = await this.options.verify(job);
+        problem = await check();
       }
       if (problem || current.cancelled) {
         // Still broken: take the whole change back out, so the app stays as it was.
         for (const commit of [...(job.commits ?? [])].reverse()) await revertCommit(this.root, commit).catch(() => {});
         if (!job.commits?.length) await restore(this.root, job.before, job.after).catch(() => {});
+        await this.options.onReverted?.(job)?.catch(() => {});
         if (current.cancelled) return void (await this.finish(job, "cancelled"));
-        job.error = `It still didn't build after trying to fix it, so nothing changed. ${lastLine(problem ?? "")}`;
+        job.error = fatal
+          ? `${fatal} Nothing changed.`
+          : `It still didn't build after trying to fix it, so nothing changed. ${lastLine(problem ?? "")}`;
         await this.emit(job.id, { type: "error", message: job.error });
         await this.finish(job, "failed");
         return;

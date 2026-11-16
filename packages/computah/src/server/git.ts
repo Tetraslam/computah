@@ -72,39 +72,54 @@ export async function restore(cwd: string, before: string, after: string): Promi
   await git(cwd, ["apply", "--whitespace=nowarn", "-"], undefined, patch);
 }
 
-/** Commit only `files`, leaving anything else in the working tree alone. */
+const FALLBACK_EMAIL = "computah@localhost";
+
+/**
+ * The machine's own git identity, or a stand-in when it has none (a fresh server).
+ * Commits use the machine's email on purpose: hosts such as Vercel refuse to deploy a
+ * commit whose author they can't match to an account.
+ */
+export async function gitIdentity(cwd: string): Promise<{ email: string; env: NodeJS.ProcessEnv }> {
+  const email = (await git(cwd, ["config", "user.email"]).catch(() => "")).trim();
+  if (email) return { email, env: {} };
+  return {
+    email: FALLBACK_EMAIL,
+    env: {
+      GIT_COMMITTER_NAME: "computah",
+      GIT_COMMITTER_EMAIL: FALLBACK_EMAIL,
+      GIT_AUTHOR_NAME: "computah",
+      GIT_AUTHOR_EMAIL: FALLBACK_EMAIL,
+    },
+  };
+}
+
+/**
+ * Commit only `files`, leaving anything else in the working tree alone. `author` is the
+ * name of whoever asked; the email stays the machine's.
+ */
 export async function commitFiles(cwd: string, files: string[], message: string, author?: string): Promise<string> {
+  const identity = await gitIdentity(cwd);
   await git(cwd, ["add", "-A", "--", ...files]);
   await git(
     cwd,
     [
       "commit",
       "--no-gpg-sign",
-      ...(author ? ["--author", `${author.replace(/[<>\n]/g, "")} <computah@localhost>`] : []),
+      ...(author ? ["--author", `${author.replace(/[<>\n]/g, "")} <${identity.email}>`] : []),
       "-m",
       message,
       "--only",
       "--",
       ...files,
     ],
-    COMMITTER,
+    identity.env,
   );
   return (await git(cwd, ["rev-parse", "HEAD"])).trim();
 }
 
-/** Used only when the machine has no git identity configured, as on a fresh server. */
-const COMMITTER = {
-  GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? "computah",
-  GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? "computah@localhost",
-};
-
 export async function revertCommit(cwd: string, commit: string): Promise<string> {
   try {
-    await git(cwd, ["revert", "--no-edit", "--no-gpg-sign", commit], {
-      ...COMMITTER,
-      GIT_AUTHOR_NAME: "computah",
-      GIT_AUTHOR_EMAIL: "computah@localhost",
-    });
+    await git(cwd, ["revert", "--no-edit", "--no-gpg-sign", commit], (await gitIdentity(cwd)).env);
   } catch (error) {
     await git(cwd, ["revert", "--abort"]).catch(() => "");
     throw new GitError(

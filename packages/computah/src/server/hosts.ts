@@ -32,6 +32,7 @@ interface Deployment {
   url?: string | null;
   state?: string;
   readyState?: string;
+  errorMessage?: string;
 }
 
 /** Vercel, connected to the repository through its git integration: a push makes a deployment. */
@@ -63,6 +64,10 @@ export function vercel(options: VercelOptions): Host {
         if (deployment && (state === "ERROR" || state === "CANCELED")) {
           throw new AppError(`The Vercel build ${state === "ERROR" ? "failed" : "was cancelled"}.\n${await buildLog(deployment.uid)}`);
         }
+        if (deployment && state === "BLOCKED") {
+          const reason = deployment.errorMessage ?? "Vercel blocked the deployment.";
+          throw new AppError(`${reason} Check that the runner's git email belongs to someone on the Vercel team.`, true);
+        }
         const waited = Date.now() - started;
         if (!deployment && waited > (options.startTimeoutMs ?? 90_000)) {
           throw new AppError("Vercel never started a build for this push. Is the repository connected to the project?");
@@ -73,16 +78,27 @@ export function vercel(options: VercelOptions): Host {
     },
   };
 
+  /**
+   * The end of a failed build's log. Vercel marks a build failed slightly before its last
+   * lines arrive, and those are the ones that say why, so read until the log stops growing.
+   */
   async function buildLog(id: string): Promise<string> {
+    let lines: string[] = [];
     try {
-      const events = (await api(`/v3/deployments/${id}/events`, { builds: "1", limit: "1000" })) as {
-        payload?: { text?: string };
-        text?: string;
-      }[];
-      const lines = (Array.isArray(events) ? events : []).map((event) => event.payload?.text ?? event.text ?? "").filter(Boolean);
-      return lines.slice(-60).join("\n");
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const events = (await api(`/v3/deployments/${id}/events`, { builds: "1", limit: "1000" })) as {
+          payload?: { text?: string };
+          text?: string;
+        }[];
+        const now = (Array.isArray(events) ? events : []).map((event) => event.payload?.text ?? event.text ?? "").filter(Boolean);
+        const settled = attempt > 0 && now.length === lines.length;
+        lines = now;
+        if (settled) break;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(options.pollMs ?? 3000, 2000)));
+      }
     } catch {
-      return "(the build log couldn't be fetched)";
+      if (!lines.length) return "(the build log couldn't be fetched)";
     }
+    return lines.slice(-60).join("\n");
   }
 }

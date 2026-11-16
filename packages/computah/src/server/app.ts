@@ -26,7 +26,15 @@ export interface AppCommands {
   env?: NodeJS.ProcessEnv;
 }
 
-export class AppError extends Error {}
+export class AppError extends Error {
+  constructor(
+    message: string,
+    /** True when editing the code can't help, so the agent isn't asked to try. */
+    readonly unfixable = false,
+  ) {
+    super(message);
+  }
+}
 
 /** A port nothing is listening on right now. */
 export function freePort(): Promise<number> {

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
-import { excludeLocally, repoRoot, run } from "./git.js";
+import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
 import { type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
@@ -89,12 +89,6 @@ export interface Me {
 
 const DATA = ".computah";
 const MAIN = "computah/main";
-const GIT_ID = {
-  GIT_COMMITTER_NAME: "computah",
-  GIT_COMMITTER_EMAIL: "computah@localhost",
-  GIT_AUTHOR_NAME: "computah",
-  GIT_AUTHOR_EMAIL: "computah@localhost",
-};
 
 /** The app as it's served: its versions, who sees which, and how changes reach them. */
 export class Site {
@@ -107,13 +101,15 @@ export class Site {
   private counts = new Map<string, { day: string; sent: number }>();
   /** Every running copy by a random name, so a page keeps talking to the copy that served it. */
   private copies = new Map<string, AppProcess>();
+  private identity: Promise<NodeJS.ProcessEnv> | null = null;
 
   constructor(private options: SiteOptions) {
     this.agentName = options.agent.name;
   }
 
   private git(cwd: string, args: string[]) {
-    return run("git", args, { cwd, env: GIT_ID });
+    this.identity ??= gitIdentity(this.options.cwd).then((identity) => identity.env);
+    return this.identity.then((env) => run("git", args, { cwd, env }));
   }
 
   /** Prepare the repo, start everyone's version, and reopen people's own versions. */
@@ -124,9 +120,15 @@ export class Site {
     await this.git(this.root, ["worktree", "prune"]);
     if (!(await this.hasBranch(MAIN))) await this.git(this.root, ["branch", MAIN, "HEAD"]);
     this.main = await this.open("main");
-    const saved = JSON.parse(await readFile(join(this.root, DATA, "people.json"), "utf8").catch(() => "{}")) as Record<string, Person>;
-    for (const [id, person] of Object.entries(saved)) {
-      if (await this.hasBranch(`computah/u/${id}`)) this.own.set(id, await this.open(id, person));
+    const saved = JSON.parse(await readFile(join(this.root, DATA, "people.json"), "utf8").catch(() => "{}")) as Record<
+      string,
+      Person & { url?: string }
+    >;
+    for (const [id, entry] of Object.entries(saved)) {
+      if (!(await this.hasBranch(`computah/u/${id}`))) continue;
+      const version = await this.open(id, { id: entry.id, name: entry.name });
+      version.url = entry.url;
+      this.own.set(id, version);
     }
     if (!this.push) await this.ensureRelease(this.main);
     this.reaper = setInterval(() => this.reap(), 30_000);
@@ -305,7 +307,7 @@ export class Site {
   }
 
   private async savePeople() {
-    const people = Object.fromEntries([...this.own].map(([id, version]) => [id, version.person]));
+    const people = Object.fromEntries([...this.own].map(([id, version]) => [id, { ...version.person, url: version.url }]));
     await writeFile(join(this.root, DATA, "people.json"), JSON.stringify(people, null, 2));
   }
 
@@ -398,6 +400,13 @@ export class Site {
       onStart: (job) => void this.startLive(version, job),
       verify: (job) => this.afterChange(version, job),
       repairs: this.options.repairs,
+      // In push mode the failed commits already reached the remote, so their reverts must follow them.
+      onReverted: async () => {
+        const push = this.push;
+        if (!push) return;
+        const target = version === this.main ? (push.branch ?? "main") : version.branch;
+        await this.git(version.workDir, ["push", push.remote ?? "origin", `HEAD:refs/heads/${target}`]);
+      },
     });
     await version.lane.init();
     return version;
@@ -440,6 +449,8 @@ export class Site {
       await this.release(version);
     } catch (error) {
       await version.lane.noteRelease(job.id, "failed", firstLine(error));
+      // Something the agent can't fix by editing code, such as the host refusing the deployment.
+      if (error instanceof AppError && error.unfixable) throw error;
       return error instanceof Error ? error.message : String(error);
     }
     job.url = version === this.main ? undefined : version.url;
@@ -496,6 +507,7 @@ export class Site {
     const sha = await this.head(version);
     const result = await push.host?.deployed({ sha, branch: target, production });
     version.url = result?.url ?? version.url;
+    if (!production) await this.savePeople();
   }
 
   private async build(version: Version) {

@@ -162,7 +162,7 @@ Another host is one function: `deployed({ sha, branch, production })` waits for 
 
 ## Not done yet
 
-- The Vercel adapter is tested against a fake Vercel that follows their documented API. It has not run against a real Vercel project yet.
+- The Vercel adapter has run against a real Vercel project with a scripted agent: a production deploy, a preview for a member, and a failed build that was fixed. The app-side route has only run in tests.
 - The agent runs on a machine you keep running. There is no adapter for a sandbox that starts per request.
 - A member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while working.
 - When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.

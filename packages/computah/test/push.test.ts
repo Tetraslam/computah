@@ -23,6 +23,7 @@ let base: string;
 let deployed: { sha: string; branch: string; production: boolean }[];
 let failNext: string | null;
 let signedIn: string | null;
+let unfixable = false;
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" });
 const remoteFile = (branch: string, file: string) => git(remote, "show", `${branch}:${file}`);
@@ -49,7 +50,7 @@ const host: Host = {
     if (failNext) {
       const message = failNext;
       failNext = null;
-      throw new AppError(message);
+      throw new AppError(message, unfixable);
     }
     return { url: `https://${input.production ? "app" : input.branch.replace(/\W+/g, "-")}.example` };
   },
@@ -84,6 +85,7 @@ beforeEach(async () => {
   git(repo, "push", "-q", "origin", "main");
   deployed = [];
   failNext = null;
+  unfixable = false;
   signedIn = "olive";
 
   site = new Site({
@@ -154,6 +156,23 @@ describe("an app its host builds", () => {
     expect(job.state).toBe("done");
     expect(job.summary).toBe("Mended it.");
     expect(deployed).toHaveLength(2);
+  });
+
+  it("doesn't ask the agent to fix what code can't fix, and leaves the remote as it was", async () => {
+    unfixable = true;
+    failNext = "The host refused the deployment.";
+    const job = await ask("refused by the host");
+    expect(job.state).toBe("failed");
+    expect(job.error).toBe("The host refused the deployment. Nothing changed.");
+    expect(deployed).toHaveLength(1);
+    expect(remoteFile("main", "page.txt")).toBe("hello\n");
+  });
+
+  it("commits with the machine's own email, which hosts check before deploying", async () => {
+    const job = await ask("signed");
+    expect(git(repo, "log", "-1", "--format=%an <%ae> / %ce", job.commit ?? "").trim()).toBe(
+      "olive <test@example.invalid> / test@example.invalid",
+    );
   });
 
   it("catches a broken build on the runner before pushing anything", async () => {
@@ -235,22 +254,37 @@ describe("the vercel host", () => {
     expect(asked).toHaveLength(4);
   });
 
-  it("fails with the end of the build log", async () => {
+  it("fails with the build log, waiting for its last lines to arrive", async () => {
+    // As on the real thing: the reason for the failure shows up a moment after the build is marked failed.
+    const logs = [
+      [{ payload: { text: "Running build" } }],
+      [{ payload: { text: "Running build" } }, { payload: { text: "Type error: nope" } }],
+    ];
     const host = vercel({
       token: "t",
       projectId: "prj",
       pollMs: 1,
       fetch: (async (url: URL) =>
         String(url).includes("/events")
-          ? answer([
-              { type: "stdout", payload: { text: "Running build" } },
-              { type: "stderr", payload: { text: "Type error: nope" } },
-            ])
+          ? answer(logs.length > 1 ? logs.shift() : logs[0])
           : answer({ deployments: [{ uid: "dpl_9", readyState: "ERROR" }] })) as never,
     });
     await expect(host.deployed({ sha: "s", branch: "b", production: false })).rejects.toThrow(
       "The Vercel build failed.\nRunning build\nType error: nope",
     );
+  });
+
+  it("reports a blocked deployment as something the agent can't fix", async () => {
+    const host = vercel({
+      token: "t",
+      projectId: "prj",
+      pollMs: 1,
+      fetch: (async () =>
+        answer({ deployments: [{ uid: "d", readyState: "BLOCKED", errorMessage: "No Git account for the commit author." }] })) as never,
+    });
+    const error = await host.deployed({ sha: "s", branch: "main", production: true }).catch((caught: unknown) => caught as AppError);
+    expect((error as AppError).unfixable).toBe(true);
+    expect((error as AppError).message).toMatch(/^No Git account for the commit author\. Check that the runner's git email/);
   });
 
   it("says so when Vercel never picks the push up, or there is no token", async () => {
