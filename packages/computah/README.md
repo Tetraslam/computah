@@ -2,17 +2,27 @@
 
 An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode or Codex) makes the change in your repo while you watch.
 
-![The box after turning a counter into a stopwatch](docs/box-done.png)
+![Typing a request into the box and watching a counter become a stopwatch](docs/demo.gif)
 
 The idea is Patrick Collison's: ["a freeform text input that's hooked up to an agent that yolo implements whatever is submitted."](https://x.com/patrickc/status/2116636967517798672) This is that, as a library.
+
+## Ways to use it
+
+| you are | you set up | what happens when someone types in the box |
+| --- | --- | --- |
+| building an app on your laptop | `<Computah />` and `computah -- next dev` | the code on your laptop changes and hot reload shows it in seconds |
+| using a personal app every day | the app on a small always-on machine, `computah serve`, you as owner | the app changes for you from any device, phone included |
+| sharing an app with family or friends | the same, with them listed as `trusted` | it changes for everyone, and anyone trusted can undo it |
+| running an app for a community | the same, with `members: "everyone"` | each person changes a version of their own. You promote the good ones to everybody |
+| hosting on Vercel | a runner on another machine, `release: { push }`, one route in the app | the change is pushed to GitHub and Vercel builds it. Members get a preview link |
+
+The first row is two lines. Every other row is one config file that names your build commands, your owners, and how to tell who is visiting.
 
 ## Use it
 
 In your project (it must be a git repository):
 
-```sh
-pnpm add computah
-```
+> Not on npm yet. The name `computah` there belongs to a different project, so don't install that one.
 
 Put the box anywhere in your app:
 
