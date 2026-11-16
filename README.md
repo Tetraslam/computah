@@ -109,6 +109,48 @@ How a change reaches people:
 
 Each person's version is a git branch (`computah/u/<name>`); everyone's is `computah/main`. Personal copies start when their person shows up and stop when idle.
 
+## An app on Vercel
+
+Vercel can't run the runner, so the runner lives on another machine with a clone of the repo, and pushes each change to GitHub for Vercel to build.
+
+On the runner, `computah.config.mjs`:
+
+```js
+import { gateway, vercel } from "computah/server";
+
+export default {
+  app: { install: "pnpm install --frozen-lockfile", build: "pnpm build" },
+  identity: gateway(process.env.COMPUTAH_SECRET),
+  trust: { owners: ["you@example.com"], members: "everyone" },
+  release: { push: { branch: "main", host: vercel({ projectId: "prj_..." }) } }, // needs VERCEL_TOKEN
+};
+```
+
+In the app, one route passes the box's requests to the runner and says who is signed in:
+
+```ts
+// app/api/computah/[...path]/route.ts
+import { createProxy } from "computah/next";
+
+export const { GET, POST } = createProxy({
+  runner: process.env.COMPUTAH_RUNNER,
+  secret: process.env.COMPUTAH_SECRET,
+  identify: async (request) => {
+    const user = await yourAuth(request);
+    return user && { id: user.id, name: user.email };
+  },
+});
+```
+
+and the box points at it: `<Computah endpoint="/api/computah" />`.
+
+- An owner's change is pushed to the branch Vercel serves. The box waits for the deployment and reloads.
+- A member's change is pushed to a branch of their own, and the box links to its preview deployment.
+- The build is checked on the runner before pushing. If Vercel's build still fails, its log goes to the agent to fix.
+- This takes as long as Vercel takes to build, and there is no live preview while you wait.
+
+Another host is one function: `deployed({ sha, branch, production })` waits for the build and returns its address, or throws with the build log.
+
 ## Adapters
 
 | kind     | built in                                   | your own                                 |
@@ -116,10 +158,12 @@ Each person's version is a git branch (`computah/u/<name>`); everyone's is `comp
 | agent    | `claude`, `opencode`, `codex`              | an object with `command()` and `parse()` |
 | identity | `exe`, `local`, `header(name)`             | a function from request to person        |
 | app      | any install, build, start and dev commands |                                          |
+| host     | `vercel`                                   | an object with `deployed()`              |
 
 ## Not done yet
 
-- Changes reach people by building and swapping on the machine that serves the app. There is no adapter yet for hosts that build for you (Vercel) or for running the agent in a separate sandbox.
+- The Vercel adapter is tested against a fake Vercel that follows their documented API. It has not run against a real Vercel project yet.
+- The agent runs on a machine you keep running. There is no adapter for a sandbox that starts per request.
 - A member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while working.
 - When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.
 - Not published to npm yet.
