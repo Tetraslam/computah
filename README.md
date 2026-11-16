@@ -52,7 +52,7 @@ Open your app and press `Ctrl+.` (`⌘.` on a Mac).
 | `endpoint` | `http://127.0.0.1:4821` | where the runner is                         |
 | `secret`   | none                    | bearer token, for a runner started with one |
 
-`computah` (the runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
+`computah` (the development runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
 
 ## Safety
 
@@ -62,10 +62,67 @@ The runner turns text into code changes, so who can reach it matters.
 - To use it from elsewhere, start it with `--secret` and pass the same `secret` to the box. Anyone with the secret can change your code, so only give the box to people you'd give commit access.
 - The agent runs with your permissions, the same as when you run it yourself.
 
+## Serve the app itself
+
+In development the box changes the checkout on your machine. To put it in a running app that other people use, let the runner serve the app:
+
+```sh
+computah serve
+```
+
+It reads `computah.config.mjs`:
+
+```js
+export default {
+  agent: "codex",
+  app: {
+    install: "pnpm install --frozen-lockfile",
+    build: "pnpm build",
+    start: "pnpm start", // must listen on $PORT
+    dev: "pnpm dev", // optional: lets the person asking watch their change live
+  },
+  identity: "exe", // exe.dev's login, "local", or (request) => ({ id, name })
+  trust: {
+    owners: ["you@example.com"],
+    trusted: ["friend@example.com"],
+    members: "everyone",
+    memberPaths: ["app/**"],
+  },
+};
+```
+
+![The served demo after three changes](docs/served.png)
+
+What each person can do:
+
+| level          | what the box does for them                                                      |
+| -------------- | ------------------------------------------------------------------------------- |
+| owner, trusted | changes the app for everyone                                                    |
+| member         | changes their own version, which only they see. An owner can make it everyone's |
+| visitor        | nothing. They never see the box                                                 |
+
+How a change reaches people:
+
+1. The person who asked is moved onto a hot-reloading copy and watches the change happen.
+2. Meanwhile the change is built. If the build fails, the change is reverted and nobody else ever saw it.
+3. The built copy is swapped in. Pages already open keep talking to the copy that served them, so nothing breaks mid-swap.
+
+Each person's version is a git branch (`computah/u/<name>`); everyone's is `computah/main`. Personal copies start when their person shows up and stop when idle.
+
+## Adapters
+
+| kind     | built in                                   | your own                                 |
+| -------- | ------------------------------------------ | ---------------------------------------- |
+| agent    | `claude`, `opencode`, `codex`              | an object with `command()` and `parse()` |
+| identity | `exe`, `local`, `header(name)`             | a function from request to person        |
+| app      | any install, build, start and dev commands |                                          |
+
 ## Not done yet
 
-- Only the OpenCode adapter has been run against the real agent. Claude Code and Codex are written from their documented output formats and tested against sample lines.
-- There is no hosted or pull-request mode yet. It's built for the app running on your own machine.
+- OpenCode and Codex have been run against the real agents. Claude Code's adapter is written from its documented output format and tested against sample lines.
+- Changes reach people by building and swapping on the machine that serves the app. There is no adapter yet for hosts that build for you (Vercel) or for running the agent in a separate sandbox.
+- A member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while working.
+- When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.
 - Not published to npm yet.
 
 ## Develop
