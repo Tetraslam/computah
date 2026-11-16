@@ -33,7 +33,10 @@ const elsewhere: Sandbox = {
           let stderr = "";
           let pending = "";
           child.stdout.on("data", (chunk: Buffer) => {
-            if (!options.onLine) return void (stdout += chunk.toString());
+            if (!options.onLine) {
+              stdout += chunk.toString();
+              return;
+            }
             pending += chunk.toString();
             const lines = pending.split("\n");
             pending = lines.pop() ?? "";
