@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- the improvements box at 16 pixels: a window, its striped title bar, one field, a hard edge -->
+  <rect x="2" y="3" width="13" height="11" fill="#000"/>
+  <rect x="1" y="2" width="13" height="11" fill="#000"/>
+  <rect x="2" y="3" width="11" height="9" fill="#fff"/>
+  <rect x="3" y="4" width="3" height="1" fill="#000"/>
+  <rect x="9" y="4" width="3" height="1" fill="#000"/>
+  <rect x="2" y="6" width="11" height="1" fill="#000"/>
+  <rect x="4" y="8" width="7" height="3" fill="#000"/>
+  <rect x="5" y="9" width="5" height="1" fill="#fff"/>
+</svg>
