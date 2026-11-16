@@ -1,6 +1,6 @@
 {
   "name": "@tetraslam13/computah",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "An improvements box for your app: type a change, and a coding agent you already have makes it.",
   "license": "MIT",
   "type": "module",
