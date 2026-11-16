@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
-import { excludeLocally, repoRoot, revertCommit, run } from "./git.js";
+import { excludeLocally, repoRoot, run } from "./git.js";
 import { type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
 import type { Agent, Job, JobContext } from "./types.js";
@@ -21,6 +21,8 @@ export interface SiteOptions {
   timeoutMs?: number;
   /** Extra environment for the agent. */
   agentEnv?: NodeJS.ProcessEnv;
+  /** How many times the agent may try to fix a change that doesn't build. Default 3. */
+  repairs?: number;
   /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
   lingerMs?: number;
 }
@@ -362,7 +364,8 @@ export class Site {
       dataDir: join(this.root, DATA, "jobs", id),
       allowedPaths: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberPaths : undefined),
       onStart: (job) => void this.startLive(version, job),
-      onChanged: (job) => this.afterChange(version, job),
+      verify: (job) => this.afterChange(version, job),
+      repairs: this.options.repairs,
     });
     await version.lane.init();
     return version;
@@ -396,19 +399,19 @@ export class Site {
     await excludeLocally(dir, ".computah-built");
   }
 
-  /** A change was committed: build it, and only keep it if the build serves. */
-  private async afterChange(version: Version, job: Job) {
-    if (!job.commit) throw new Error("The change couldn't be saved.");
+  /** A change was committed: build it and swap it in. Returns the build's error if it didn't build. */
+  private async afterChange(version: Version, job: Job): Promise<string | null> {
+    if (!job.commit) return "The change couldn't be saved.";
     await version.lane.noteRelease(job.id, "building");
     try {
       await this.release(version);
     } catch (error) {
-      await revertCommit(version.workDir, job.commit).catch(() => {});
       await version.lane.noteRelease(job.id, "failed", firstLine(error));
-      throw new Error(`It didn't build, so nothing changed. ${firstLine(error)}`);
+      return error instanceof Error ? error.message : String(error);
     }
     await version.lane.noteRelease(job.id, "live");
     if (version === this.main) void this.spread();
+    return null;
   }
 
   private ensureRelease(version: Version): Promise<void> {

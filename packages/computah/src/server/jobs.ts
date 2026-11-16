@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { changedFiles, commitFiles, excludeLocally, GitError, repoRoot, restore, revertCommit, run, snapshot } from "./git.js";
 import { outsidePaths } from "./identity.js";
-import { buildPrompt } from "./prompt.js";
+import { buildPrompt, buildRepairPrompt } from "./prompt.js";
 import type { Agent, Job, JobContext, JobEvent, JobEventBody } from "./types.js";
 
 export interface ComputahOptions {
@@ -25,8 +25,13 @@ export interface ComputahOptions {
   allowedPaths?: (job: Job) => string[] | undefined;
   /** Called when a job starts working. */
   onStart?: (job: Job) => void | Promise<void>;
-  /** Called after a job finishes with changes, before it is reported done. May throw to fail the job. */
-  onChanged?: (job: Job) => void | Promise<void>;
+  /**
+   * Check a job's committed change, for example by building it. Return what went wrong, or null if it's fine.
+   * On a problem the agent is shown it and asked to fix it; if it can't, the whole change is reverted.
+   */
+  verify?: (job: Job) => Promise<string | null>;
+  /** How many times the agent may try to fix a failed check. Default 3. */
+  repairs?: number;
 }
 
 export class RequestError extends Error {
@@ -159,8 +164,11 @@ export class Computah {
     if (job.state !== "done") throw new RequestError("Only a finished change can be undone.", 409);
     if (this.current) throw new RequestError("Wait for the change in progress to finish first.", 409);
     try {
-      if (job.commit) await revertCommit(this.root, job.commit);
-      else if (job.before && job.after) await restore(this.root, job.before, job.after);
+      const commits = job.commits ?? (job.commit ? [job.commit] : []);
+      for (const commit of [...commits].reverse()) await revertCommit(this.root, commit);
+      if (commits.length) {
+        // Reverted above.
+      } else if (job.before && job.after) await restore(this.root, job.before, job.after);
     } catch (error) {
       throw new RequestError(error instanceof GitError ? error.message : "The change couldn't be undone.", 409);
     }
@@ -300,11 +308,37 @@ export class Computah {
         job.by?.name ?? job.by?.id,
       ).catch(() => undefined);
     }
-    if (files.length && this.options.onChanged) {
-      try {
-        await this.options.onChanged(job);
-      } catch (error) {
-        job.error = error instanceof Error ? error.message : String(error);
+    if (job.commit) job.commits = [job.commit];
+    if (files.length && this.options.verify) {
+      // Check the change. If the check fails, show the agent what went wrong and let it fix it, a few times.
+      let problem = await this.options.verify(job);
+      for (let attempt = 1; problem && attempt <= (this.options.repairs ?? 3) && !current.cancelled; attempt++) {
+        await this.emit(job.id, { type: "text", text: `It didn't build. Fixing it (try ${attempt}).` });
+        const fix = this.options.agent.command(buildRepairPrompt(job.text, problem), this.root);
+        const repaired = await this.runAgent(job, current, fix.command, fix.args, fix.stdin);
+        if (current.cancelled || repaired.failed) break;
+        if (repaired.summary) job.summary = repaired.summary;
+        const now = await snapshot(this.root);
+        const fixed = (await changedFiles(this.root, job.after, now)).filter((file) => !file.startsWith(`${DATA_DIR}/`));
+        job.after = now;
+        if (!fixed.length) break;
+        if (outsidePaths(fixed, this.options.allowedPaths?.(job)).length) break;
+        job.files = [...new Set([...job.files, ...fixed])];
+        const commit = await commitFiles(
+          this.root,
+          fixed,
+          `computah: fix the build for "${job.text.replace(/\s+/g, " ").slice(0, 50)}"`,
+          job.by?.name ?? job.by?.id,
+        ).catch(() => undefined);
+        if (commit) job.commits = [...(job.commits ?? []), commit];
+        problem = await this.options.verify(job);
+      }
+      if (problem || current.cancelled) {
+        // Still broken: take the whole change back out, so the app stays as it was.
+        for (const commit of [...(job.commits ?? [])].reverse()) await revertCommit(this.root, commit).catch(() => {});
+        if (!job.commits?.length) await restore(this.root, job.before, job.after).catch(() => {});
+        if (current.cancelled) return void (await this.finish(job, "cancelled"));
+        job.error = `It still didn't build after trying to fix it, so nothing changed. ${lastLine(problem ?? "")}`;
         await this.emit(job.id, { type: "error", message: job.error });
         await this.finish(job, "failed");
         return;
@@ -397,4 +431,8 @@ function killTree(child: ChildProcess | null) {
       // Already gone.
     }
   }, 3000).unref();
+}
+
+function lastLine(text: string): string {
+  return text.trim().split("\n").filter(Boolean).pop()?.slice(0, 200) ?? "";
 }

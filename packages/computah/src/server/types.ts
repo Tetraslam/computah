@@ -34,6 +34,8 @@ export interface Job {
   before?: string;
   after?: string;
   commit?: string;
+  /** Every commit the job made, oldest first: the change, then any fixes to make it build. */
+  commits?: string[];
   /** Who asked, when the runner knows. */
   by?: { id: string; name?: string };
   /** Which version of the app this changes: "main" for everyone's, or a person's own. */

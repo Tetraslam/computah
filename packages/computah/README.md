@@ -104,7 +104,7 @@ What each person can do:
 How a change reaches people:
 
 1. The person who asked is moved onto a hot-reloading copy and watches the change happen.
-2. Meanwhile the change is built. If the build fails, the change is reverted and nobody else ever saw it.
+2. Meanwhile the change is built. If the build fails, the agent is shown the error and fixes it, up to three times. Only if it can't is the change taken back out, and nobody else ever saw it.
 3. The built copy is swapped in. Pages already open keep talking to the copy that served them, so nothing breaks mid-swap.
 
 Each person's version is a git branch (`computah/u/<name>`); everyone's is `computah/main`. Personal copies start when their person shows up and stop when idle.

@@ -37,3 +37,27 @@ export function buildPrompt(text: string, context: JobContext): string {
     "When you're done, reply with one or two plain sentences for the person who asked: what changed, in terms of what they'll see. No file names, no code, no headings, and nothing about checks you ran unless one is still failing.",
   ].join("\n");
 }
+
+/** The instructions an agent gets when the change it just made doesn't build. */
+export function buildRepairPrompt(text: string, problem: string): string {
+  return [
+    "You just changed this app's code for a request from its improvements box. The change is committed, but the app no longer builds.",
+    "",
+    "The request was:",
+    "<request>",
+    text.trim(),
+    "</request>",
+    "",
+    "The build failed with:",
+    "<error>",
+    clip(problem.trim(), 6000),
+    "</error>",
+    "",
+    "Fix the build while keeping what the request asked for. Look at your last commit (`git show --stat HEAD`) to see what you changed.",
+    "- Fix the cause, whether it's in your change or in code your change exposed. Don't remove the feature to make the error go away.",
+    "- Run the failing step yourself if you can, and check it passes before you finish.",
+    "- Don't start, stop or restart servers. Don't commit, push or change git state.",
+    "",
+    "When you're done, reply with one or two plain sentences for the person who asked: what they'll see now. No file names, no code.",
+  ].join("\n");
+}

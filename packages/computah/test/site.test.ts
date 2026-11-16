@@ -35,6 +35,10 @@ const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encodi
 const agent: Agent = {
   name: "scripted",
   command: (prompt) => {
+    // Asked to fix a build, it mends the word that breaks it, unless the request said "forever".
+    if (prompt.includes("The build failed with")) {
+      return { command: "bash", args: ["-c", `grep -q forever page.txt || sed -i 's/broken/mended/' page.txt; echo "RESULT Mended it."`] };
+    }
     const text = /<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "";
     const [target, ...rest] = text.split(" ");
     const file = target?.includes(".") ? target : "page.txt";
@@ -162,10 +166,22 @@ describe("a served app", () => {
     expect(readFileSync(merged, "utf8")).toBe("from olive\n");
   });
 
-  it("a change that doesn't build never goes live and leaves the history clean", async () => {
+  it("shows the agent a failed build and keeps the change once it's fixed", async () => {
     const job = await ask("olive", "broken");
+    expect(job.state).toBe("done");
+    expect(job.release).toBe("live");
+    expect(job.commits).toHaveLength(2);
+    expect(job.summary).toBe("Mended it.");
+    expect(await page()).toBe("hello\nmended\n");
+    // Undo takes out the change and its fix together.
+    expect((await post("olive", `/jobs/${job.id}/undo`)).status).toBe(200);
+    expect(await page()).toBe("hello\n");
+  });
+
+  it("a change the agent can't make build never goes live and leaves the history clean", async () => {
+    const job = await ask("olive", "broken forever");
     expect(job.state).toBe("failed");
-    expect(job.error).toMatch(/didn't build, so nothing changed/);
+    expect(job.error).toMatch(/still didn't build after trying to fix it, so nothing changed/);
     expect(await page()).toBe("hello\n");
     expect(readFileSync(join(repo, ".computah/work/main/page.txt"), "utf8")).toBe("hello\n");
     // The app still takes changes afterwards.

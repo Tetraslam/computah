@@ -46,14 +46,14 @@ export function runStep(command: string, cwd: string, env: NodeJS.ProcessEnv = {
     const child = spawn("sh", ["-c", command], { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let tail = "";
     const keep = (chunk: Buffer) => {
-      tail = (tail + chunk.toString()).slice(-1500);
+      tail = (tail + chunk.toString()).slice(-8000);
     };
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
     child.on("error", () => reject(new AppError(`Couldn't run: ${command}`)));
     child.on("close", (code) => {
       if (code === 0) return resolve();
-      const lines = tail.trim().split("\n").filter(Boolean).slice(-6).join("\n");
+      const lines = tail.trim().split("\n").filter(Boolean).slice(-40).join("\n");
       reject(new AppError(`"${command}" failed.\n${lines}`));
     });
   });
@@ -82,7 +82,7 @@ export class AppProcess {
     });
     running.child = child;
     const keep = (chunk: Buffer) => {
-      running.tail = (running.tail + chunk.toString()).slice(-1500);
+      running.tail = (running.tail + chunk.toString()).slice(-8000);
     };
     child.stdout?.on("data", keep);
     child.stderr?.on("data", keep);
@@ -105,7 +105,7 @@ export class AppProcess {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (this.exited) {
-        const lines = this.tail.trim().split("\n").filter(Boolean).slice(-6).join("\n");
+        const lines = this.tail.trim().split("\n").filter(Boolean).slice(-40).join("\n");
         throw new AppError(`The app stopped while starting.\n${lines}`);
       }
       if (await answers(this.port, path)) return;
