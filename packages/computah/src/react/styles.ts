@@ -145,6 +145,12 @@ export const STYLES = /* css */ `
 }
 .steps li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.proposals { flex: none; margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--ink); background: var(--sparse); }
+.proposal { margin: 6px; padding: 7px 9px 6px; border: 1px solid var(--ink); background: var(--paper); }
+.proposal .actions { padding-left: 0; }
+.who { font: 700 12px/1.3 var(--ui); margin-right: 3px; }
+.footer { flex: none; margin: 0; padding: 6px 12px 7px; border-top: 1px dotted var(--ink); font-size: 11px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
 /* ---------- asking ---------- */
 
 .ask { flex: none; padding: 10px 12px 10px; }

@@ -43,20 +43,14 @@ export function Cat() {
   }, []);
 
   useEffect(() => {
-    const id = window.setTimeout(
-      () => setRun({ level: run.level + 1 }),
-      IDLE_MS,
-    );
+    const id = window.setTimeout(() => setRun({ level: run.level + 1 }), IDLE_MS);
     return () => window.clearTimeout(id);
   }, [run]);
 
   useEffect(() => {
     if (level === 0) return;
     try {
-      const Ctx =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctxRef.current ??= new Ctx();
       if (ctxRef.current.state === "suspended") void ctxRef.current.resume();
       meow(ctxRef.current, level);
@@ -81,30 +75,10 @@ export function Cat() {
         style={{ "--bounce": `${bounce}s` } as CSSProperties}
       >
         {/* ears */}
-        <polygon
-          points="20,40 24,10 42,30"
-          fill="#fff"
-          stroke="#000"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <polygon
-          points="76,40 72,10 54,30"
-          fill="#fff"
-          stroke="#000"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
+        <polygon points="20,40 24,10 42,30" fill="#fff" stroke="#000" strokeWidth="3" strokeLinejoin="round" />
+        <polygon points="76,40 72,10 54,30" fill="#fff" stroke="#000" strokeWidth="3" strokeLinejoin="round" />
         {/* head */}
-        <ellipse
-          cx="48"
-          cy="52"
-          rx="30"
-          ry="25"
-          fill="#fff"
-          stroke="#000"
-          strokeWidth="3"
-        />
+        <ellipse cx="48" cy="52" rx="30" ry="25" fill="#fff" stroke="#000" strokeWidth="3" />
         {/* eyes: closed while asleep, open once it wants you */}
         {awake ? (
           <>
@@ -113,48 +87,19 @@ export function Cat() {
           </>
         ) : (
           <>
-            <path
-              d="M32 47 Q37 51 42 47"
-              fill="none"
-              stroke="#000"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M54 47 Q59 51 64 47"
-              fill="none"
-              stroke="#000"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
+            <path d="M32 47 Q37 51 42 47" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M54 47 Q59 51 64 47" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
           </>
         )}
         {/* nose and mouth open wider with each meow */}
         <polygon points="45,55 51,55 48,58" fill="#000" />
         {awake ? (
-          <ellipse
-            cx="48"
-            cy="64"
-            rx={2.5 + mouth * 0.6}
-            ry={1.5 + mouth * 0.9}
-            fill="#000"
-          />
+          <ellipse cx="48" cy="64" rx={2.5 + mouth * 0.6} ry={1.5 + mouth * 0.9} fill="#000" />
         ) : (
-          <path
-            d="M48 58 Q44 63 40 60 M48 58 Q52 63 56 60"
-            fill="none"
-            stroke="#000"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M48 58 Q44 63 40 60 M48 58 Q52 63 56 60" fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" />
         )}
         {/* whiskers */}
-        <path
-          d="M18 54 L4 50 M18 60 L4 62 M78 54 L92 50 M78 60 L92 62"
-          stroke="#000"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
+        <path d="M18 54 L4 50 M18 60 L4 62 M78 54 L92 50 M78 60 L92 62" stroke="#000" strokeWidth="2" strokeLinecap="round" />
       </svg>
       {awake ? (
         <p

@@ -13,24 +13,13 @@ function parseJson(line: string): Json | null {
   }
 }
 
-const obj = (value: unknown): Json =>
-  value && typeof value === "object" ? (value as Json) : {};
-const str = (value: unknown): string =>
-  typeof value === "string" ? value : "";
+const obj = (value: unknown): Json => (value && typeof value === "object" ? (value as Json) : {});
+const str = (value: unknown): string => (typeof value === "string" ? value : "");
 
 /** A short human label for a tool call: the file it touched or the command it ran. */
 export function toolDetail(input: unknown): string | undefined {
   const fields = obj(input);
-  for (const key of [
-    "file_path",
-    "filePath",
-    "path",
-    "command",
-    "pattern",
-    "query",
-    "url",
-    "description",
-  ]) {
+  for (const key of ["file_path", "filePath", "path", "command", "pattern", "query", "url", "description"]) {
     const value = fields[key];
     if (typeof value === "string" && value.trim()) {
       const oneLine = value.replace(/\s+/g, " ").trim();
@@ -73,8 +62,7 @@ export function claude(options: AgentOptions = {}): Agent {
         const content = obj(message.message).content;
         for (const block of Array.isArray(content) ? content : []) {
           const part = obj(block);
-          if (part.type === "text" && str(part.text).trim())
-            events.push({ type: "text", text: str(part.text) });
+          if (part.type === "text" && str(part.text).trim()) events.push({ type: "text", text: str(part.text) });
           if (part.type === "tool_use") {
             events.push({
               type: "tool",
@@ -121,8 +109,7 @@ export function opencode(options: AgentOptions = {}): Agent {
       const message = parseJson(line);
       if (!message) return [];
       const part = obj(message.part);
-      if (message.type === "text" && str(part.text).trim())
-        return [{ type: "text", text: str(part.text) }];
+      if (message.type === "text" && str(part.text).trim()) return [{ type: "text", text: str(part.text) }];
       if (message.type === "tool_use") {
         const state = obj(part.state);
         return [
@@ -138,10 +125,7 @@ export function opencode(options: AgentOptions = {}): Agent {
         return [
           {
             type: "error",
-            message:
-              str(obj(error.data).message) ||
-              str(error.name) ||
-              "The agent reported an error.",
+            message: str(obj(error.data).message) || str(error.name) || "The agent reported an error.",
           },
         ];
       }
@@ -171,17 +155,10 @@ export function codex(options: AgentOptions = {}): Agent {
       const message = parseJson(line);
       if (!message) return [];
       const item = obj(message.item);
-      if (
-        message.type === "item.completed" &&
-        item.type === "agent_message" &&
-        str(item.text).trim()
-      ) {
+      if (message.type === "item.completed" && item.type === "agent_message" && str(item.text).trim()) {
         return [{ type: "text", text: str(item.text) }];
       }
-      if (
-        message.type === "item.started" &&
-        item.type === "command_execution"
-      ) {
+      if (message.type === "item.started" && item.type === "command_execution") {
         return [
           {
             type: "tool",
@@ -202,10 +179,7 @@ export function codex(options: AgentOptions = {}): Agent {
         return [
           {
             type: "error",
-            message:
-              str(message.message) ||
-              str(obj(message.error).message) ||
-              "The agent reported an error.",
+            message: str(message.message) || str(obj(message.error).message) || "The agent reported an error.",
           },
         ];
       }

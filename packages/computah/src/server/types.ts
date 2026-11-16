@@ -14,13 +14,7 @@ export interface JobContext {
   };
 }
 
-export type JobState =
-  | "queued"
-  | "working"
-  | "done"
-  | "failed"
-  | "cancelled"
-  | "undone";
+export type JobState = "queued" | "working" | "done" | "failed" | "cancelled" | "undone";
 
 export interface Job {
   id: string;
@@ -40,15 +34,21 @@ export interface Job {
   before?: string;
   after?: string;
   commit?: string;
-  branch?: string;
-  pr?: string;
+  /** Who asked, when the runner knows. */
+  by?: { id: string; name?: string };
+  /** Which version of the app this changes: "main" for everyone's, or a person's own. */
+  version?: string;
+  /** Where the change is on its way to being served. Absent in development, where saving is releasing. */
+  release?: "building" | "live" | "failed";
+  releaseError?: string;
 }
 
 export type JobEventBody =
   | { type: "state"; state: JobState }
   | { type: "text"; text: string }
   | { type: "tool"; name: string; detail?: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "release"; state: "building" | "live" | "failed"; message?: string };
 
 export type JobEvent = JobEventBody & { seq: number; at: number };
 

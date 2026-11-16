@@ -11,11 +11,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  type ClientOptions,
-  describeElement,
-  type JobEvent,
-} from "./client.js";
+import { type ClientOptions, describeElement, type JobEvent } from "./client.js";
 import { STYLES } from "./styles.js";
 import { type BoxJob, useBox } from "./use-box.js";
 
@@ -53,9 +49,7 @@ const save = (change: Saved) => {
   }
 };
 
-const isMac = () =>
-  typeof navigator !== "undefined" &&
-  /Mac|iPhone|iPad/.test(navigator.platform);
+const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function matchesHotkey(
   event: {
@@ -107,14 +101,11 @@ export function plainSummary(text: string | undefined) {
 
 export function elapsed(from: number | undefined, to: number) {
   const seconds = Math.max(0, Math.round((to - (from ?? to)) / 1000));
-  return seconds < 60
-    ? `${seconds}s`
-    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
 function stepLine(step: JobEvent): string | null {
-  if (step.type === "tool")
-    return step.detail ? `${step.name}  ${step.detail}` : step.name;
+  if (step.type === "tool") return step.detail ? `${step.name}  ${step.detail}` : step.name;
   if (step.type === "text") return plainSummary(step.text);
   if (step.type === "error") return step.message;
   return null;
@@ -132,13 +123,13 @@ export function Computah({
   const [root, setRoot] = useState<ShadowRoot | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(
-    null,
-  );
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Element | null>(null);
   const [hover, setHover] = useState<DOMRect | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [scope, setScope] = useState<"everyone" | "me">("everyone");
+  const [ready, setReady] = useState(false);
   // Set on the client only: reading the clock during a server render breaks prerendering.
   const [now, setNow] = useState(0);
   const [mac, setMac] = useState(false);
@@ -146,9 +137,7 @@ export function Computah({
   const windowRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<Element | null>(null);
   const box = useBox({ endpoint, secret, active: open });
-  const live = box.jobs.some(
-    (job) => job.state === "queued" || job.state === "working",
-  );
+  const live = box.jobs.some((job) => job.state === "queued" || job.state === "working");
 
   // Mount a shadow root on the body, so the host app's styles and ours never meet.
   useEffect(() => {
@@ -160,8 +149,7 @@ export function Computah({
     setMac(isMac());
     setOpen(saved.open ?? defaultOpen);
     setDraft(saved.draft ?? "");
-    if (saved.x !== undefined && saved.y !== undefined)
-      setPosition({ x: saved.x, y: saved.y });
+    if (saved.x !== undefined && saved.y !== undefined) setPosition({ x: saved.x, y: saved.y });
     setRoot(shadow);
     return () => host.remove();
   }, [defaultOpen]);
@@ -203,11 +191,7 @@ export function Computah({
     }
     if (zoomed.current) return;
     zoomed.current = true;
-    if (
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-      typeof element.animate !== "function"
-    )
-      return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof element.animate !== "function") return;
     const to = element.getBoundingClientRect();
     const from = {
       left: window.innerWidth - 46,
@@ -219,12 +203,7 @@ export function Computah({
     outline.className = "zoom";
     root.appendChild(outline);
     element.setAttribute("data-zooming", "");
-    const frame = (rect: {
-      left: number;
-      top: number;
-      width: number;
-      height: number;
-    }) => ({
+    const frame = (rect: { left: number; top: number; width: number; height: number }) => ({
       left: `${rect.left}px`,
       top: `${rect.top}px`,
       width: `${rect.width}px`,
@@ -263,11 +242,8 @@ export function Computah({
   useEffect(() => {
     if (!picking) return;
     const under = (event: MouseEvent) =>
-      document
-        .elementsFromPoint(event.clientX, event.clientY)
-        .find((element) => !element.hasAttribute("data-computah")) ?? null;
-    const move = (event: MouseEvent) =>
-      setHover(under(event)?.getBoundingClientRect() ?? null);
+      document.elementsFromPoint(event.clientX, event.clientY).find((element) => !element.hasAttribute("data-computah")) ?? null;
+    const move = (event: MouseEvent) => setHover(under(event)?.getBoundingClientRect() ?? null);
     const click = (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
@@ -290,10 +266,45 @@ export function Computah({
     };
   }, [picking]);
 
+  // When the runner serves the app, a change arrives as a new copy of the page, so the page is reloaded:
+  // once onto the live copy when work starts, and once onto the built one when it's done.
+  const level = box.info?.level;
+  const canChoose = box.served && (level === "owner" || level === "trusted");
+  const seen = useRef(new Map<string, string>());
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  useEffect(() => {
+    if (!box.served) return;
+    for (const job of box.jobs) {
+      const before = seen.current.get(job.id);
+      seen.current.set(job.id, job.state);
+      if (before === undefined || before === job.state) continue;
+      const settled = job.state === "done" || job.state === "undone" || (job.state === "failed" && before === "working");
+      if (!settled) continue;
+      if (draftRef.current.trim()) setReady(true);
+      else window.location.reload();
+    }
+  }, [box.jobs, box.served]);
+  const working = box.jobs.some((job) => job.state === "working");
+  useEffect(() => {
+    if (!box.served || !working) return;
+    const refresh = box.refresh;
+    const timer = setInterval(() => void refresh(), 1200);
+    return () => clearInterval(timer);
+  }, [box.served, working, box.refresh]);
+  useEffect(() => {
+    if (!box.served || !working || !box.info?.live) return;
+    // The live copy is up and this page isn't from it yet: move onto it, once per job.
+    const id = box.jobs.find((job) => job.state === "working")?.id ?? "";
+    if (sessionStorage.getItem("computah:live") === id || draftRef.current.trim()) return;
+    sessionStorage.setItem("computah:live", id);
+    window.location.reload();
+  }, [box.served, working, box.info?.live, box.jobs]);
+
   const send = async () => {
     const text = draft.trim();
     if (!text || box.sending || box.connection !== "ready") return;
-    if (await box.submit(text, picked?.isConnected ? picked : null)) {
+    if (await box.submit(text, picked?.isConnected ? picked : null, canChoose ? scope : undefined)) {
       setDraft("");
       setPicked(null);
       save({ draft: "" });
@@ -301,11 +312,7 @@ export function Computah({
   };
 
   const onFieldKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void send();
     }
@@ -325,14 +332,8 @@ export function Computah({
       y: event.clientY - rect.top,
     };
     const move = (moved: globalThis.PointerEvent) => {
-      const x = Math.min(
-        Math.max(0, moved.clientX - offset.x),
-        window.innerWidth - rect.width,
-      );
-      const y = Math.min(
-        Math.max(0, moved.clientY - offset.y),
-        window.innerHeight - 24,
-      );
+      const x = Math.min(Math.max(0, moved.clientX - offset.x), window.innerWidth - rect.width);
+      const y = Math.min(Math.max(0, moved.clientY - offset.y), window.innerHeight - 24);
       setPosition({ x, y });
       save({ x, y });
     };
@@ -346,27 +347,18 @@ export function Computah({
   };
 
   if (!root) return null;
+  // Someone who can't change the app never sees the box.
+  if (box.served && (!box.info || level === "visitor")) return null;
 
-  const pickedLabel = picked
-    ? (describeElement(picked).text?.slice(0, 28) ??
-      picked.tagName.toLowerCase())
-    : "";
-  const style: CSSProperties | undefined = position
-    ? { left: position.x, top: position.y, bottom: "auto", transform: "none" }
-    : undefined;
+  const pickedLabel = picked ? (describeElement(picked).text?.slice(0, 28) ?? picked.tagName.toLowerCase()) : "";
+  const style: CSSProperties | undefined = position ? { left: position.x, top: position.y, bottom: "auto", transform: "none" } : undefined;
   const keys = hotkeyLabel(hotkey, mac);
 
   return createPortal(
     <>
       <style>{STYLES}</style>
       {launcher && !open && (
-        <button
-          type="button"
-          className="launcher"
-          onClick={show}
-          aria-label={`Open ${title} (${keys})`}
-          title={`${title}  ${keys}`}
-        >
+        <button type="button" className="launcher" onClick={show} aria-label={`Open ${title} (${keys})`} title={`${title}  ${keys}`}>
           <span className="launcher-mark" aria-hidden="true" />
         </button>
       )}
@@ -387,21 +379,9 @@ export function Computah({
         </div>
       )}
       {open && (
-        <section
-          ref={windowRef}
-          className="window"
-          data-picking={picking || undefined}
-          role="dialog"
-          aria-label={title}
-          style={style}
-        >
+        <section ref={windowRef} className="window" data-picking={picking || undefined} role="dialog" aria-label={title} style={style}>
           <header className="titlebar" onPointerDown={drag}>
-            <button
-              type="button"
-              className="closebox"
-              onClick={hide}
-              aria-label="Close"
-            />
+            <button type="button" className="closebox" onClick={hide} aria-label="Close" />
             <span className="title">{title}</span>
           </header>
 
@@ -422,6 +402,33 @@ export function Computah({
             </div>
           ) : (
             <>
+              {(box.info?.proposals?.length ?? 0) > 0 && (
+                <ul className="proposals">
+                  {box.info?.proposals?.map((proposal) => (
+                    <li key={proposal.id} className="proposal">
+                      <p className="request">
+                        <span className="who">{proposal.name}</span> {proposal.changes.join("; ")}
+                      </p>
+                      <div className="actions">
+                        <button type="button" className="link" onClick={() => void box.promote(proposal.id)}>
+                          make it everyone's
+                        </button>
+                        <button type="button" className="link" onClick={() => void box.discard(proposal.id)}>
+                          discard
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {ready && (
+                <p className="problem" role="status">
+                  your change is ready.
+                  <button type="button" className="link" onClick={() => window.location.reload()}>
+                    show it
+                  </button>
+                </p>
+              )}
               {box.jobs.length > 0 && (
                 <ol className="jobs" aria-live="polite">
                   {box.jobs.slice(0, 20).map((job) => (
@@ -430,9 +437,7 @@ export function Computah({
                       job={job}
                       now={now}
                       expanded={expanded === job.id}
-                      onToggle={() =>
-                        setExpanded(expanded === job.id ? null : job.id)
-                      }
+                      onToggle={() => setExpanded(expanded === job.id ? null : job.id)}
                       onStop={() => void box.cancel(job.id)}
                       onUndo={() => void box.undo(job.id)}
                       onRetry={() => {
@@ -446,11 +451,7 @@ export function Computah({
               {box.problem && (
                 <p className="problem" role="alert">
                   {box.problem}
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={box.dismissProblem}
-                  >
+                  <button type="button" className="link" onClick={box.dismissProblem}>
                     ok
                   </button>
                 </p>
@@ -467,11 +468,7 @@ export function Computah({
                   className="field"
                   rows={1}
                   value={draft}
-                  placeholder={
-                    box.jobs.length
-                      ? "what else should change?"
-                      : "what should change?"
-                  }
+                  placeholder={box.jobs.length ? "what else should change?" : "what should change?"}
                   aria-label="What should change?"
                   onChange={(event) => {
                     setDraft(event.target.value);
@@ -483,39 +480,44 @@ export function Computah({
                   {picked ? (
                     <span className="chip">
                       <span className="chip-text">about “{pickedLabel}”</span>
-                      <button
-                        type="button"
-                        className="chip-x"
-                        onClick={() => setPicked(null)}
-                        aria-label="Forget the element"
-                      >
+                      <button type="button" className="chip-x" onClick={() => setPicked(null)} aria-label="Forget the element">
                         ×
                       </button>
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      className="plain"
-                      onClick={() => setPicking(true)}
-                    >
+                    <button type="button" className="plain" onClick={() => setPicking(true)}>
                       point at it
                     </button>
                   )}
                   <span className="spacer" />
-                  <span className="quiet agent">
-                    {box.connection === "ready" ? box.agent : "connecting"}
-                  </span>
-                  <button
-                    type="submit"
-                    className="default"
-                    disabled={
-                      !draft.trim() || box.sending || box.connection !== "ready"
-                    }
-                  >
+                  {canChoose ? (
+                    <button
+                      type="button"
+                      className="link"
+                      onClick={() => setScope(scope === "everyone" ? "me" : "everyone")}
+                      title="Who gets this change"
+                    >
+                      {scope === "everyone" ? "for everyone" : "just for me"}
+                    </button>
+                  ) : (
+                    <span className="quiet agent">
+                      {box.connection !== "ready" ? "connecting" : level === "member" ? "only you will see it" : box.agent}
+                    </span>
+                  )}
+                  <button type="submit" className="default" disabled={!draft.trim() || box.sending || box.connection !== "ready"}>
                     Send
                   </button>
                 </div>
               </form>
+              {box.served && box.info?.hasOwn && (
+                <p className="footer">
+                  {box.info.version === "mine" ? "you're on your own version." : "you're on everyone's version."}
+                  <button type="button" className="link" onClick={() => void box.view(box.info?.version === "mine" ? "main" : "mine")}>
+                    {box.info.version === "mine" ? "see everyone's" : "back to mine"}
+                  </button>
+                  {box.info.stale && <span className="quiet">yours is behind everyone's.</span>}
+                </p>
+              )}
             </>
           )}
         </section>
@@ -536,9 +538,7 @@ function JobRow(props: {
 }) {
   const { job, now } = props;
   const live = job.state === "queued" || job.state === "working";
-  const lines = job.steps
-    .map(stepLine)
-    .filter((line): line is string => Boolean(line));
+  const lines = job.steps.map(stepLine).filter((line): line is string => Boolean(line));
   const status =
     job.state === "queued"
       ? "waiting its turn"
@@ -558,23 +558,13 @@ function JobRow(props: {
       <div className="status">
         <span className="mark" aria-hidden="true" />
         <span className="status-text">{status}</span>
-        {live && now > 0 && (
-          <span className="quiet clock">
-            {elapsed(job.startedAt ?? job.createdAt, now)}
-          </span>
-        )}
+        {job.version && job.version !== "main" && !live && <span className="quiet">yours</span>}
+        {live && now > 0 && <span className="quiet clock">{elapsed(job.startedAt ?? job.createdAt, now)}</span>}
       </div>
       <div className="actions">
         {lines.length > 0 && (
-          <button
-            type="button"
-            className="link"
-            onClick={props.onToggle}
-            aria-expanded={props.expanded}
-          >
-            {props.expanded
-              ? "hide steps"
-              : `${lines.length} ${lines.length === 1 ? "step" : "steps"}`}
+          <button type="button" className="link" onClick={props.onToggle} aria-expanded={props.expanded}>
+            {props.expanded ? "hide steps" : `${lines.length} ${lines.length === 1 ? "step" : "steps"}`}
           </button>
         )}
         {live && (
@@ -587,9 +577,7 @@ function JobRow(props: {
             undo
           </button>
         )}
-        {(job.state === "failed" ||
-          job.state === "cancelled" ||
-          job.state === "undone") && (
+        {(job.state === "failed" || job.state === "cancelled" || job.state === "undone") && (
           <button type="button" className="link" onClick={props.onRetry}>
             ask again
           </button>

@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,22 +7,15 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { claude, codex, opencode, toolDetail } from "../src/server/agents.js";
 import { changedFiles, restore, snapshot } from "../src/server/git.js";
-import {
-  cleanContext,
-  createRunnerServer,
-  type RequestFacts,
-  refuse,
-} from "../src/server/http.js";
+import { cleanContext, createRunnerServer, type RequestFacts, refuse } from "../src/server/http.js";
 import { Computah } from "../src/server/jobs.js";
 import { buildPrompt } from "../src/server/prompt.js";
 import type { Agent, Job } from "../src/server/types.js";
 
 let repo: string;
-const git = (...args: string[]) =>
-  execFileSync("git", args, { cwd: repo, encoding: "utf8" });
+const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
 const read = (file: string) => readFileSync(join(repo, file), "utf8");
-const write = (file: string, text: string) =>
-  writeFileSync(join(repo, file), text);
+const write = (file: string, text: string) => writeFileSync(join(repo, file), text);
 
 beforeEach(() => {
   repo = mkdtempSync(join(tmpdir(), "computah-test-"));
@@ -55,8 +42,7 @@ function scripted(script: string): Agent {
       const [kind, ...rest] = line.split(" ");
       const text = rest.join(" ");
       if (kind === "SAY") return [{ type: "text", text }];
-      if (kind === "TOOL")
-        return [{ type: "tool", name: "edit", detail: text }];
+      if (kind === "TOOL") return [{ type: "tool", name: "edit", detail: text }];
       if (kind === "RESULT") return [{ type: "result", text }];
       if (kind === "ERROR") return [{ type: "error", message: text }];
       return [];
@@ -81,14 +67,8 @@ describe("snapshots", () => {
     execFileSync("mkdir", ["-p", join(repo, "ignored")]);
     write("ignored/secret.txt", "x\n");
     const after = await snapshot(repo);
-    expect((await changedFiles(repo, before, after)).sort()).toEqual([
-      "new.txt",
-      "page.txt",
-    ]);
-    expect(git("status", "--porcelain").trimEnd().split("\n").sort()).toEqual([
-      " M page.txt",
-      "?? new.txt",
-    ]);
+    expect((await changedFiles(repo, before, after)).sort()).toEqual(["new.txt", "page.txt"]);
+    expect(git("status", "--porcelain").trimEnd().split("\n").sort()).toEqual([" M page.txt", "?? new.txt"]);
   });
 
   it("restores edits, new files and deletions", async () => {
@@ -117,9 +97,7 @@ describe("jobs", () => {
   it("runs the agent, records what changed, commits it, and undoes it", async () => {
     const computah = new Computah({
       cwd: repo,
-      agent: scripted(
-        "echo 'SAY looking'; echo 'TOOL page.txt'; echo better > page.txt; echo 'RESULT The page now says better.'",
-      ),
+      agent: scripted("echo 'SAY looking'; echo 'TOOL page.txt'; echo better > page.txt; echo 'RESULT The page now says better.'"),
     });
     const job = await settle(
       computah,
@@ -132,13 +110,9 @@ describe("jobs", () => {
     expect(job.state).toBe("done");
     expect(job.files).toEqual(["page.txt"]);
     expect(job.summary).toBe("The page now says better.");
-    expect(git("log", "-1", "--format=%s").trim()).toBe(
-      "computah: make it better",
-    );
+    expect(git("log", "-1", "--format=%s").trim()).toBe("computah: make it better");
     expect(git("status", "--porcelain").trim()).toBe("");
-    expect((await computah.history(job.id)).map((event) => event.type)).toEqual(
-      ["state", "state", "text", "tool", "state"],
-    );
+    expect((await computah.history(job.id)).map((event) => event.type)).toEqual(["state", "state", "text", "tool", "state"]);
 
     await computah.undo(job.id);
     expect(read("page.txt")).toBe("hello\n");
@@ -149,14 +123,9 @@ describe("jobs", () => {
     write("page.txt", "hello\nmy draft\n");
     const computah = new Computah({
       cwd: repo,
-      agent: scripted(
-        "echo 'from the agent' >> page.txt; echo 'RESULT Added a line.'",
-      ),
+      agent: scripted("echo 'from the agent' >> page.txt; echo 'RESULT Added a line.'"),
     });
-    const job = await settle(
-      computah,
-      (await computah.submit("add a line")).id,
-    );
+    const job = await settle(computah, (await computah.submit("add a line")).id);
     expect(job.commit).toBeUndefined();
     expect(git("log", "--oneline").trim().split("\n")).toHaveLength(1);
     await computah.undo(job.id);
@@ -180,8 +149,7 @@ describe("jobs", () => {
       agent: scripted("echo half > page.txt; echo 'SAY working'; sleep 30"),
     });
     const { id } = await computah.submit("slow change");
-    for (let i = 0; i < 200 && read("page.txt") !== "half\n"; i++)
-      await new Promise((resolve) => setTimeout(resolve, 20));
+    for (let i = 0; i < 200 && read("page.txt") !== "half\n"; i++) await new Promise((resolve) => setTimeout(resolve, 20));
     await computah.cancel(id);
     const job = await settle(computah, id);
     expect(job.state).toBe("cancelled");
@@ -212,9 +180,7 @@ describe("jobs", () => {
       },
     });
     const job = await settle(computah, (await computah.submit("anything")).id);
-    expect(job.error).toBe(
-      "no-such-agent-binary isn't installed or isn't on the PATH.",
-    );
+    expect(job.error).toBe("no-such-agent-binary isn't installed or isn't on the PATH.");
   });
 
   it("rejects empty and oversized requests", async () => {
@@ -223,9 +189,7 @@ describe("jobs", () => {
       agent: scripted("true"),
       maxLength: 10,
     });
-    await expect(computah.submit("   ")).rejects.toThrow(
-      "Say what should change.",
-    );
+    await expect(computah.submit("   ")).rejects.toThrow("Say what should change.");
     await expect(computah.submit("x".repeat(11))).rejects.toThrow("too long");
   });
 
@@ -235,10 +199,7 @@ describe("jobs", () => {
       commit: false,
       agent: scripted("echo 'RESULT nothing to do'"),
     });
-    const job = await settle(
-      computah,
-      (await computah.submit("look around")).id,
-    );
+    const job = await settle(computah, (await computah.submit("look around")).id);
     expect(job.summary).toBe("nothing to do");
     expect(git("status", "--porcelain").trim()).toBe("");
     const again = new Computah({ cwd: repo, agent: scripted("true") });
@@ -274,9 +235,7 @@ describe("who may call the runner", () => {
   });
 
   it("refuses another machine, whatever headers it sends", () => {
-    expect(refuse({ ...local, remoteAddress: "192.168.1.20" }, {})).toMatch(
-      /Only this machine/,
-    );
+    expect(refuse({ ...local, remoteAddress: "192.168.1.20" }, {})).toMatch(/Only this machine/);
   });
 
   it("refuses a rebound hostname", () => {
@@ -284,23 +243,14 @@ describe("who may call the runner", () => {
   });
 
   it("refuses another website using the visitor's browser", () => {
-    expect(refuse({ ...local, origin: "https://evil.example" }, {})).toMatch(
-      /isn't allowed/,
-    );
-    expect(
-      refuse({ ...local, origin: "https://localhost.evil.example" }, {}),
-    ).toMatch(/isn't allowed/);
+    expect(refuse({ ...local, origin: "https://evil.example" }, {})).toMatch(/isn't allowed/);
+    expect(refuse({ ...local, origin: "https://localhost.evil.example" }, {})).toMatch(/isn't allowed/);
   });
 
   it("refuses a write without the marker header or a JSON body", () => {
     expect(refuse({ ...local, marker: undefined }, {})).toMatch(/x-computah/);
     expect(refuse({ ...local, contentType: "text/plain" }, {})).toMatch(/JSON/);
-    expect(
-      refuse(
-        { ...local, method: "GET", marker: undefined, contentType: undefined },
-        {},
-      ),
-    ).toBeNull();
+    expect(refuse({ ...local, method: "GET", marker: undefined, contentType: undefined }, {})).toBeNull();
   });
 
   it("with a secret, takes the secret from anywhere and nothing else", () => {
@@ -311,12 +261,8 @@ describe("who may call the runner", () => {
       origin: "https://app.example",
     };
     const options = { secret: "s3cret", origins: ["https://app.example"] };
-    expect(
-      refuse({ ...remote, authorization: "Bearer s3cret" }, options),
-    ).toBeNull();
-    expect(
-      refuse({ ...remote, authorization: "Bearer wrong!" }, options),
-    ).toMatch(/secret/);
+    expect(refuse({ ...remote, authorization: "Bearer s3cret" }, options)).toBeNull();
+    expect(refuse({ ...remote, authorization: "Bearer wrong!" }, options)).toMatch(/secret/);
     expect(refuse(remote, options)).toMatch(/secret/);
     expect(
       refuse(
@@ -343,19 +289,13 @@ describe("the http runner", () => {
   beforeEach(async () => {
     const computah = new Computah({
       cwd: repo,
-      agent: scripted(
-        "echo 'SAY on it'; echo new > page.txt; echo 'RESULT Changed the page.'",
-      ),
+      agent: scripted("echo 'SAY on it'; echo new > page.txt; echo 'RESULT Changed the page.'"),
     });
     server = createRunnerServer(computah);
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
-  afterEach(
-    () => new Promise<void>((resolve) => void server.close(() => resolve())),
-  );
+  afterEach(() => new Promise<void>((resolve) => void server.close(() => resolve())));
 
   it("takes a request, streams its events to the end, and undoes it", async () => {
     const created = await fetch(`${base}/jobs`, {
@@ -367,9 +307,7 @@ describe("the http runner", () => {
       }),
     });
     expect(created.status).toBe(201);
-    expect(created.headers.get("access-control-allow-origin")).toBe(
-      "http://localhost:3000",
-    );
+    expect(created.headers.get("access-control-allow-origin")).toBe("http://localhost:3000");
     const { job } = (await created.json()) as { job: Job };
 
     const events = await (
@@ -461,11 +399,7 @@ describe("agent adapters", () => {
       { type: "text", text: "Looking." },
       { type: "tool", name: "Edit", detail: "app/page.tsx" },
     ]);
-    expect(
-      agent.parse(
-        JSON.stringify({ type: "result", is_error: false, result: "Done." }),
-      ),
-    ).toEqual([{ type: "result", text: "Done." }]);
+    expect(agent.parse(JSON.stringify({ type: "result", is_error: false, result: "Done." }))).toEqual([{ type: "result", text: "Done." }]);
     expect(
       agent.parse(
         JSON.stringify({
@@ -484,9 +418,7 @@ describe("agent adapters", () => {
       '{"type":"tool_use","timestamp":1,"sessionID":"s","part":{"type":"tool","tool":"shell","state":{"status":"completed","input":{"command":"printf world >> note.txt","workdir":"/tmp/x"},"output":"ok"}}}';
     const text =
       '{"type":"text","timestamp":2,"sessionID":"s","part":{"type":"text","text":"Appended `world` as a new last line in `note.txt`."}}';
-    expect(agent.parse(tool)).toEqual([
-      { type: "tool", name: "shell", detail: "printf world >> note.txt" },
-    ]);
+    expect(agent.parse(tool)).toEqual([{ type: "tool", name: "shell", detail: "printf world >> note.txt" }]);
     expect(agent.parse(text)).toEqual([
       {
         type: "text",
@@ -543,9 +475,7 @@ describe("agent adapters", () => {
       expect(agent.parse("{not json")).toEqual([]);
       expect(agent.parse("[1,2]")).toEqual([]);
     }
-    expect(toolDetail({ command: `echo ${"x".repeat(300)}` })?.length).toBe(
-      140,
-    );
+    expect(toolDetail({ command: `echo ${"x".repeat(300)}` })?.length).toBe(140);
   });
 });
 

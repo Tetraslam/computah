@@ -8,7 +8,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev": "pnpm --filter computah build && pnpm --filter demo dev"
+    "dev": "pnpm --filter computah build && pnpm --filter demo dev",
+    "serve": "pnpm --filter computah build && node packages/computah/dist/cli.js serve"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",

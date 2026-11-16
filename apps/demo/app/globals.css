@@ -4,8 +4,7 @@
 @theme inline {
   --color-ink: #000;
   --color-paper: #fff;
-  --font-words:
-    "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-words: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 

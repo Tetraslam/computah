@@ -6,9 +6,13 @@ export {
   codex,
   opencode,
 } from "./agents.js";
+export type { AppCommands } from "./app.js";
+export { createFrontServer, PREFIX } from "./front.js";
 export { createRunnerServer, type ServeOptions, serve } from "./http.js";
+export { exe, header, type Identity, type Level, local, type Person, type Trust } from "./identity.js";
 export { Computah, type ComputahOptions, RequestError } from "./jobs.js";
 export { buildPrompt } from "./prompt.js";
+export { type Me, Site, type SiteOptions } from "./site.js";
 export type {
   Agent,
   AgentCommand,

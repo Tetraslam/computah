@@ -19,7 +19,7 @@ Put the box anywhere in your app:
 ```tsx
 import { Computah } from "computah";
 
-<Computah />
+<Computah />;
 ```
 
 Run the runner next to your dev server:
@@ -44,13 +44,13 @@ Open your app and press `Ctrl+.` (`⌘.` on a Mac).
 
 `<Computah>`:
 
-| prop | default | |
-| --- | --- | --- |
-| `hotkey` | `"mod+."` | opens and closes the box |
-| `title` | `"improvements"` | the window's title |
-| `launcher` | `true` | show the small button that opens it |
-| `endpoint` | `http://127.0.0.1:4821` | where the runner is |
-| `secret` | none | bearer token, for a runner started with one |
+| prop       | default                 |                                             |
+| ---------- | ----------------------- | ------------------------------------------- |
+| `hotkey`   | `"mod+."`               | opens and closes the box                    |
+| `title`    | `"improvements"`        | the window's title                          |
+| `launcher` | `true`                  | show the small button that opens it         |
+| `endpoint` | `http://127.0.0.1:4821` | where the runner is                         |
+| `secret`   | none                    | bearer token, for a runner started with one |
 
 `computah` (the runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
 

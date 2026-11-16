@@ -1,33 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import {
-  appendFile,
-  mkdir,
-  readdir,
-  readFile,
-  writeFile,
-} from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import {
-  changedFiles,
-  commitFiles,
-  excludeLocally,
-  GitError,
-  repoRoot,
-  restore,
-  revertCommit,
-  run,
-  snapshot,
-} from "./git.js";
+import { changedFiles, commitFiles, excludeLocally, GitError, repoRoot, restore, revertCommit, run, snapshot } from "./git.js";
+import { outsidePaths } from "./identity.js";
 import { buildPrompt } from "./prompt.js";
-import type {
-  Agent,
-  Job,
-  JobContext,
-  JobEvent,
-  JobEventBody,
-} from "./types.js";
+import type { Agent, Job, JobContext, JobEvent, JobEventBody } from "./types.js";
 
 export interface ComputahOptions {
   /** The repository the agent works in. */
@@ -38,7 +17,16 @@ export interface ComputahOptions {
   /** Stop a job that runs longer than this. Default 15 minutes. */
   timeoutMs?: number;
   /** Longest request accepted, in characters. Default 4000. */
-  maxLength?: number;
+  maxLength?: number /** Where job records are kept. Default `.computah/jobs` in the repo. */;
+  dataDir?: string;
+  /** Extra environment for the agent process. */
+  env?: NodeJS.ProcessEnv;
+  /** Globs a job's changes must stay inside, or undefined for anywhere. A job that strays is rolled back. */
+  allowedPaths?: (job: Job) => string[] | undefined;
+  /** Called when a job starts working. */
+  onStart?: (job: Job) => void | Promise<void>;
+  /** Called after a job finishes with changes, before it is reported done. May throw to fail the job. */
+  onChanged?: (job: Job) => void | Promise<void>;
 }
 
 export class RequestError extends Error {
@@ -58,6 +46,7 @@ const KEEP_JOBS = 200;
 export class Computah {
   readonly agentName: string;
   private root = "";
+  private dataDir = "";
   private ready: Promise<void> | null = null;
   private jobs = new Map<string, Job>();
   private events = new Map<string, JobEvent[]>();
@@ -77,14 +66,13 @@ export class Computah {
   init(): Promise<void> {
     this.ready ??= (async () => {
       this.root = await repoRoot(this.options.cwd);
-      await mkdir(join(this.root, DATA_DIR, "jobs"), { recursive: true });
+      this.dataDir = this.options.dataDir ?? join(this.root, DATA_DIR, "jobs");
+      await mkdir(this.dataDir, { recursive: true });
       await excludeLocally(this.root, `${DATA_DIR}/`);
-      for (const name of await readdir(join(this.root, DATA_DIR, "jobs"))) {
+      for (const name of await readdir(this.dataDir)) {
         if (!name.endsWith(".json")) continue;
         try {
-          const job = JSON.parse(
-            await readFile(join(this.root, DATA_DIR, "jobs", name), "utf8"),
-          ) as Job;
+          const job = JSON.parse(await readFile(join(this.dataDir, name), "utf8")) as Job;
           // A job that was running when the runner stopped never finished.
           if (job.state === "queued" || job.state === "working") {
             job.state = "failed";
@@ -105,9 +93,7 @@ export class Computah {
   }
 
   list(): Job[] {
-    return [...this.jobs.values()]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, KEEP_JOBS);
+    return [...this.jobs.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, KEEP_JOBS);
   }
 
   get(id: string): Job | undefined {
@@ -133,12 +119,11 @@ export class Computah {
     return () => set.delete(listener);
   }
 
-  async submit(text: string, context: JobContext = {}): Promise<Job> {
+  async submit(text: string, context: JobContext = {}, extra: Pick<Job, "by" | "version"> = {}): Promise<Job> {
     await this.init();
     const trimmed = text.trim();
     if (!trimmed) throw new RequestError("Say what should change.");
-    if (trimmed.length > (this.options.maxLength ?? 4000))
-      throw new RequestError("That request is too long.");
+    if (trimmed.length > (this.options.maxLength ?? 4000)) throw new RequestError("That request is too long.");
     const job: Job = {
       id: `${Date.now().toString(36)}${randomBytes(4).toString("hex")}`,
       text: trimmed,
@@ -146,6 +131,7 @@ export class Computah {
       state: "queued",
       agent: this.agentName,
       createdAt: Date.now(),
+      ...extra,
     };
     this.jobs.set(job.id, job);
     this.events.set(job.id, []);
@@ -170,27 +156,36 @@ export class Computah {
 
   async undo(id: string): Promise<Job> {
     const job = this.require(id);
-    if (job.state !== "done")
-      throw new RequestError("Only a finished change can be undone.", 409);
-    if (this.current)
-      throw new RequestError(
-        "Wait for the change in progress to finish first.",
-        409,
-      );
+    if (job.state !== "done") throw new RequestError("Only a finished change can be undone.", 409);
+    if (this.current) throw new RequestError("Wait for the change in progress to finish first.", 409);
     try {
       if (job.commit) await revertCommit(this.root, job.commit);
-      else if (job.before && job.after)
-        await restore(this.root, job.before, job.after);
+      else if (job.before && job.after) await restore(this.root, job.before, job.after);
     } catch (error) {
-      throw new RequestError(
-        error instanceof GitError
-          ? error.message
-          : "The change couldn't be undone.",
-        409,
-      );
+      throw new RequestError(error instanceof GitError ? error.message : "The change couldn't be undone.", 409);
     }
     await this.finish(job, "undone");
     return job;
+  }
+
+  /** Record where a finished job's change is on its way to being served. */
+  async noteRelease(id: string, state: NonNullable<Job["release"]>, message?: string) {
+    const job = this.jobs.get(id);
+    if (!job) return;
+    job.release = state;
+    job.releaseError = state === "failed" ? message : undefined;
+    await this.save(job);
+    await this.emit(id, { type: "release", state, message });
+  }
+
+  /** Mark a job undone without touching files, for a caller that reverted it itself. */
+  async markUndone(id: string) {
+    const job = this.jobs.get(id);
+    if (job) await this.finish(job, "undone");
+  }
+
+  get busy(): boolean {
+    return this.current !== null || this.queue.length > 0;
   }
 
   // ---------- internals ----------
@@ -202,14 +197,11 @@ export class Computah {
   }
 
   private eventsPath(id: string) {
-    return join(this.root, DATA_DIR, "jobs", `${id}.jsonl`);
+    return join(this.dataDir, `${id}.jsonl`);
   }
 
   private async save(job: Job) {
-    await writeFile(
-      join(this.root, DATA_DIR, "jobs", `${job.id}.json`),
-      JSON.stringify(job, null, 2),
-    );
+    await writeFile(join(this.dataDir, `${job.id}.json`), JSON.stringify(job, null, 2));
   }
 
   private async emit(id: string, body: JobEventBody) {
@@ -218,9 +210,7 @@ export class Computah {
     const event = { ...body, seq: list.length, at: Date.now() } as JobEvent;
     list.push(event);
     for (const listener of this.listeners.get(id) ?? []) listener(event);
-    await appendFile(this.eventsPath(id), `${JSON.stringify(event)}\n`).catch(
-      () => {},
-    );
+    await appendFile(this.eventsPath(id), `${JSON.stringify(event)}\n`).catch(() => {});
   }
 
   private async finish(job: Job, state: Job["state"]) {
@@ -267,22 +257,17 @@ export class Computah {
     );
     await this.save(job);
     await this.emit(job.id, { type: "state", state: "working" });
+    await this.options.onStart?.(job);
 
-    const { command, args, stdin } = this.options.agent.command(
-      buildPrompt(job.text, job.context),
-      this.root,
-    );
+    const { command, args, stdin } = this.options.agent.command(buildPrompt(job.text, job.context), this.root);
     const outcome = await this.runAgent(job, current, command, args, stdin);
 
     job.after = await snapshot(this.root);
-    const files = (await changedFiles(this.root, job.before, job.after)).filter(
-      (file) => !file.startsWith(`${DATA_DIR}/`),
-    );
+    const files = (await changedFiles(this.root, job.before, job.after)).filter((file) => !file.startsWith(`${DATA_DIR}/`));
 
     if (current.cancelled || outcome.failed) {
       // Leave the app as it was: a stopped or failed job keeps none of its edits.
-      if (files.length)
-        await restore(this.root, job.before, job.after).catch(() => {});
+      if (files.length) await restore(this.root, job.before, job.after).catch(() => {});
       if (!current.cancelled) {
         job.error = outcome.failed;
         await this.emit(job.id, {
@@ -294,17 +279,36 @@ export class Computah {
       return;
     }
 
+    const stray = outsidePaths(files, this.options.allowedPaths?.(job));
+    if (stray.length) {
+      await restore(this.root, job.before, job.after).catch(() => {});
+      job.error = `That would change parts of the app you can't change here (${stray.slice(0, 3).join(", ")}).`;
+      await this.emit(job.id, { type: "error", message: job.error });
+      await this.finish(job, "failed");
+      return;
+    }
+
     job.files = files;
-    job.summary =
-      outcome.summary || (files.length ? "Done." : "Nothing was changed.");
+    job.summary = outcome.summary || (files.length ? "Done." : "Nothing was changed.");
     const touchesDirty = files.some((file) => dirtyBefore.has(file));
     if (files.length && (this.options.commit ?? true) && !touchesDirty) {
       const subject = job.text.replace(/\s+/g, " ").slice(0, 68);
       job.commit = await commitFiles(
         this.root,
         files,
-        `computah: ${subject}\n\n${job.text}\n\nRequested through the improvements box.`,
+        `computah: ${subject}\n\n${job.text}\n\nRequested through the improvements box${job.by ? ` by ${job.by.name ?? job.by.id}` : ""}.`,
+        job.by?.name ?? job.by?.id,
       ).catch(() => undefined);
+    }
+    if (files.length && this.options.onChanged) {
+      try {
+        await this.options.onChanged(job);
+      } catch (error) {
+        job.error = error instanceof Error ? error.message : String(error);
+        await this.emit(job.id, { type: "error", message: job.error });
+        await this.finish(job, "failed");
+        return;
+      }
     }
     await this.finish(job, "done");
   }
@@ -333,6 +337,7 @@ export class Computah {
       try {
         child = spawn(command, args, {
           cwd: this.root,
+          env: { ...process.env, ...this.options.env },
           detached: true,
           stdio: ["pipe", "pipe", "pipe"],
         });
@@ -349,11 +354,7 @@ export class Computah {
       );
 
       child.on("error", (error: NodeJS.ErrnoException) =>
-        done(
-          error.code === "ENOENT"
-            ? `${command} isn't installed or isn't on the PATH.`
-            : `Couldn't start ${command}.`,
-        ),
+        done(error.code === "ENOENT" ? `${command} isn't installed or isn't on the PATH.` : `Couldn't start ${command}.`),
       );
       child.stdin?.on("error", () => {});
       child.stdin?.end(stdin ?? "");
@@ -374,11 +375,7 @@ export class Computah {
       });
       child.on("close", (code) => {
         if (agentError) done(agentError);
-        else if (code !== 0 && !current.cancelled)
-          done(
-            stderrTail.trim().split("\n").pop() ||
-              `${command} exited with code ${code}.`,
-          );
+        else if (code !== 0 && !current.cancelled) done(stderrTail.trim().split("\n").pop() || `${command} exited with code ${code}.`);
         else done();
       });
     });
@@ -395,8 +392,7 @@ function killTree(child: ChildProcess | null) {
   }
   setTimeout(() => {
     try {
-      if (child.pid && child.exitCode === null)
-        process.kill(-child.pid, "SIGKILL");
+      if (child.pid && child.exitCode === null) process.kill(-child.pid, "SIGKILL");
     } catch {
       // Already gone.
     }
