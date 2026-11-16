@@ -21,7 +21,7 @@ function Reserve({ size }: { size: Size }) {
 const sizes = {
   home: { wide: 64, narrow: 64 },
   "start-here": { wide: 164, narrow: 225 },
-  "people-and-trust": { wide: 250, narrow: 250 },
+  "people-and-trust": { wide: 280, narrow: 280 },
   "how-a-change-travels": { wide: 114, narrow: 114 },
   safety: { wide: 247, narrow: 290 },
   reference: { wide: 87, narrow: 87 },

@@ -404,6 +404,7 @@ body {
 }
 .code pre code {
   font: inherit;
+  font-variant-ligatures: none;
 }
 @media (max-width: 640px) {
   .code pre {

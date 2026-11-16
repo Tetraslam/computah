@@ -52,7 +52,7 @@ The route only passes on a change that comes from your app's own pages, with the
 - **The build is checked first.** The runner builds the change itself before pushing (turn that off with `check: false`). If Vercel's build fails anyway, the end of its log goes to the agent to fix, the same as a [failed build](/how-a-change-travels) anywhere else.
 - **Someone else pushed in the meantime?** The runner takes their work in and pushes again, once. If it conflicts, the change doesn't go out.
 
-Vercel refuses to build a commit from an author it doesn't know. The runner commits with this machine's git email, so set that email to someone on the Vercel team. The name on the commit is still whoever asked.
+Vercel refuses to build a commit from an author it can't match to someone on the team. So the runner commits with the runner machine's own git email (set it to someone on the Vercel team), and only the name on the commit is whoever asked. If Vercel blocks a deployment anyway, the box reports why instead of handing it to the agent, since editing code can't fix it.
 
 ## what you give up
 
@@ -63,6 +63,10 @@ Vercel refuses to build a commit from an author it doesn't know. The runner comm
 
 A host is one function. `deployed({ sha, branch, production })` waits until the host has built that commit, and returns where it's served. If the build failed, it throws an error carrying the build's log, and the agent gets to fix it. See [adapters](/adapters).
 
+## how far it's been tested
+
+The Vercel adapter has run against a real Vercel project, with a scripted agent standing in for a real one: a production deploy, a preview for a member, and a failed build that was fixed.
+
 <Note title="not done yet">
-The Vercel adapter has run against a real Vercel project with a scripted agent: a production deploy, a preview for a member, and a failed build that was fixed. The app-side route has only run in tests.
+The app-side route, `createProxy`, has only run in tests.
 </Note>

@@ -12,7 +12,8 @@ const abilities: { what: string; who: Level[] }[] = [
   { what: "changes the app for everyone", who: ["owner", "trusted"] },
   { what: "changes a version of their own", who: ["owner", "trusted", "member"] },
   { what: "undoes their own changes", who: ["owner", "trusted", "member"] },
-  { what: "undoes anyone's change", who: ["owner"] },
+  { what: "undoes any change to everyone's version", who: ["owner", "trusted"] },
+  { what: "undoes changes to other people's own versions", who: ["owner"] },
   { what: "makes someone's version everyone's", who: ["owner"] },
   { what: "has a daily limit", who: ["member"] },
 ];

@@ -1,21 +1,92 @@
 ---
 title: sandboxes
-description: an agent that works somewhere other than your machine
+description: an agent that works on a throwaway machine instead of yours
 ---
 
-By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead. The code is copied in, without your ignored files (so no `.env`), the agent works there, and only a patch of what it changed comes back.
+By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead:
+
+1. The code is copied in, without your ignored files, so no `.env`.
+2. The agent works on that copy.
+3. Only a patch of what it changed comes back. The runner applies it, then commits, checks and builds it like any other change.
+4. The sandbox is thrown away.
 
 ```js title="computah.config.mjs"
 import { exeSandbox } from "@tetraslam13/computah/server";
 
 export default {
   // ...
-  sandbox: { in: exeSandbox() }, // members only. add `for: "everyone"` to sandbox owners too
+  // members only. add `for: "everyone"` to sandbox owners too
+  sandbox: { in: exeSandbox() },
 };
 ```
 
-There are two built in, `exeSandbox()` and `modalSandbox()`. While the agent is in a sandbox there's no live copy to watch: its changes arrive all at once when it finishes.
+`sandbox.in` is the sandbox to use. `sandbox.for` is who gets one: `"members"` (the default) sandboxes everyone who isn't an owner or trusted, and `"everyone"` sandboxes every request.
+
+| sandbox | what it is | what it needs |
+| --- | --- | --- |
+| `exeSandbox()` | a standalone exe.dev VM per request, cut off from the internet except exe's model gateway | an ssh key exe.dev knows, on the runner's machine |
+| `modalSandbox()` | a Modal Sandbox per request | the `modal` package, Modal credentials, and a Modal Secret holding your model key |
+
+Measured: on exe, a real Claude Code change took 12 seconds end to end, about 5 of them starting the VM. On Modal, the first sandbox took 113 seconds while the image built, and 2 seconds after that.
+
+While the agent is in a sandbox there's no live preview: its changes arrive all at once when it finishes.
+
+## exeSandbox
+
+A standalone exe.dev VM per request, made and removed over ssh. The stock image already has Claude Code, Codex and OpenCode. By default it's set up to use exe.dev's model gateway, so no model keys go into the sandbox.
+
+| option | default | |
+| --- | --- | --- |
+| `egress` | `"integrations"` | what the VM may reach: `"integrations"` (only exe.dev's own services, such as its model gateway) or `"all"` (the whole internet) |
+| `setup` | points Claude Code and Codex at exe's gateway | shell commands run once in a new sandbox, before the code is copied in |
+| `ssh` | | extra arguments for every ssh call, for example `["-i", "/path/to/key"]` |
+| `prefix` | `"computah-sbx"` | the start of each sandbox's name |
+
+## modalSandbox
+
+A Modal Sandbox per request. Install the `modal` package next to computah, and put Modal credentials in the environment or in `~/.modal.toml`.
+
+| option | default | |
+| --- | --- | --- |
+| `app` | `"computah"` | the Modal app sandboxes are created under |
+| `image` | `"node:24-bookworm-slim"` | a registry image to start from |
+| `build` | installs git, Claude Code, Codex and OpenCode | Dockerfile lines that put git and your agent on the image |
+| `secrets` | none | names of Modal Secrets to give the agent, such as one holding `ANTHROPIC_API_KEY` |
+| `blockNetwork` | `false` | cut the sandbox off from the network entirely. Only useful with an agent that needs none |
+| `timeoutMs` | 20 minutes | how long a sandbox may live |
+
+```js
+modalSandbox({ secrets: ["anthropic"] });
+```
 
 <Note title="not done yet">
-This card is short for now. More on choosing and setting up a sandbox is on its way. The Modal sandbox has only run with a scripted agent.
+The Modal sandbox has only run with a scripted agent. A real agent there needs a model key in a Modal Secret, which hasn't been tried.
 </Note>
+
+## your own
+
+A sandbox is an object with a name and `open()`. `open()` returns a session with two functions:
+
+```ts
+import type { Sandbox } from "@tetraslam13/computah/server";
+
+const mine: Sandbox = {
+  name: "mine",
+  async open() {
+    // start a machine
+    return {
+      // Run a command there. Feed it `stdin`, call `onLine`
+      // for each line it prints, and resolve with its exit code,
+      // what it printed, and the end of its stderr.
+      async exec(command, { stdin, onLine } = {}) {
+        return { code: 0, stdout: "", stderr: "" };
+      },
+      // Stop whatever is running and throw the machine away.
+      // Safe to call more than once.
+      async close() {},
+    };
+  },
+};
+```
+
+The runner does the rest through `exec`: it unpacks the code, runs the agent, and reads the patch back. The machine needs `sh`, `tar`, `base64`, `git` and your agent.

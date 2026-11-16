@@ -7,10 +7,10 @@ When the runner serves the app, everyone who visits is one of four levels. The `
 
 | level | what the box does for them |
 | --- | --- |
-| owner | changes the app for everyone, undoes anyone's change, and decides about other people's versions |
-| trusted | changes the app for everyone, and undoes their own changes |
+| owner | changes the app for everyone, undoes any change, and decides about other people's versions |
+| trusted | changes the app for everyone, and undoes any change to everyone's version |
 | member | changes a version of their own, which only they see. An owner can make it everyone's |
-| visitor | nothing. They never see the box, and the runner refuses them if they try anyway. If the app takes [guests](#guests), someone who isn't signed in becomes a member instead |
+| visitor | nothing. They never see the box, and the runner refuses them if they try anyway. If the app takes [guests](/guests), someone who isn't signed in becomes a member instead |
 
 Pick a level to see what it allows:
 
@@ -25,6 +25,7 @@ trust: {
   members: "everyone",
   memberPaths: ["app/**"],
   memberNote: "you can change the pages, not the layout.",
+  memberRules: "change files under app/ only, and keep each page a server component.",
   memberDailyLimit: 20,
   dailyLimit: 200,
 },
@@ -33,8 +34,9 @@ trust: {
 - **`owners`** and **`trusted`** are lists of people. An entry matches a person's id or their name, ignoring case, so emails work.
 - **`members`** is either a list too, or `"everyone"` for anyone signed in. Leave it out and nobody is a member.
 - **`memberPaths`** limits which files a member's change may touch. They're globs from the root of the repository: `*` stays inside one folder, `**` crosses folders. A change that reaches outside them is taken back out. Leave it out and a member may change any file.
-- **`memberNote`** says, in plain words, what members may change. The agent is told it, and members see it at the bottom of their box.
-- **`memberCheck`** looks at a member's finished change and can refuse it: it gets each changed file's new contents and returns why the change isn't acceptable, or `null`. A refused change is taken back out. `clientOnly()` is a ready-made one, see [guests](#guests).
+- **`memberNote`** tells members, in a sentence, what they may change. They see it at the bottom of their box.
+- **`memberRules`** are the rules for a member's change beyond `memberPaths`, given to the agent. Leave it out and the agent gets `memberNote` instead.
+- **`memberCheck`** looks at a member's finished change and can refuse it: it gets each changed file's new contents and returns why the change isn't acceptable, or `null`. A refused change is taken back out. `clientOnly()` is a ready-made one, see [letting anyone change it](/guests).
 - **`memberDailyLimit`** is how many requests a member may send in a day. It's 20 unless you say otherwise. **`dailyLimit`** caps all members together, and has no cap unless you set one.
 
 Anyone who is none of these is a visitor.
@@ -62,33 +64,10 @@ An owner's box lists other people's versions that have changes in them, with eac
 
 ## guests
 
-A public app can let people who aren't signed in take part too. They become guests: the box gives them a random name kept in a signed cookie, and from then on they're members like any other, with a version of their own.
-
-```js title="computah.config.mjs"
-import { clientOnly } from "@tetraslam13/computah/server";
-
-export default {
-  // ...
-  guests: { secret: process.env.COMPUTAH_GUEST_SECRET, forgetMs: 24 * 60 * 60 * 1000 },
-  trust: {
-    owners: ["you@example.com"],
-    members: "everyone",
-    memberPaths: ["app/playground/*.tsx"],
-    memberCheck: clientOnly(),
-    memberNote: "you can change the framed parts of each page.",
-    memberDailyLimit: 10,
-    dailyLimit: 200,
-  },
-  maxCopies: 6,
-};
-```
-
-- **`guests.secret`** signs the cookie, so nobody can pretend to be another guest. Guests need `members: "everyone"` to do anything.
-- **`guests.forgetMs`** removes a guest's version once they've been away that long.
-- **`maxCopies`** caps how many personal copies run at once. Starting one more stops the one used longest ago.
-
-Guests are strangers, so keep what they change to code that runs only in their own browser. Put each changeable piece in its own file under `memberPaths`, and load it from a wrapper outside them with `next/dynamic` and `ssr: false`. `clientOnly()` then refuses any change that stops being a client component, declares server code, or imports anything but `react` (pass `clientOnly({ imports: [...] })` to allow more). This site works exactly that way: the framed pieces on its cards are files in `apps/docs/playground`.
+A public app can also let people who aren't signed in take part, as guests. That has its own card: [letting anyone change it](/guests).
 
 ## who sees which requests
 
 Everyone who can use the box sees the requests made to everyone's version, plus their own. Owners see every request.
+
+Anyone may stop or undo their own requests. Trusted people may also stop or undo any request to everyone's version, since they can change it anyway. Owners may stop or undo anything.

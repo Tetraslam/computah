@@ -27,7 +27,9 @@ The runner checks the commit out into a fresh folder, installs, builds, and star
 
 The agent is shown the build's error and asked to fix the build while keeping what the request asked for. The box says "It didn't build. Fixing it (try 1)." Each fix is its own commit. It gets up to three tries (`repairs` in the config changes that).
 
-If it still doesn't build, every commit the change made is reverted, and the box says nothing changed. Nobody else ever saw it.
+A fix is held to the same limits as the change it fixes: the same `memberPaths`, and the same `memberCheck`. A fix that breaks them is dropped on the spot.
+
+If a fix breaks those limits, or three tries still don't make it build, the whole change comes out: every commit it made is reverted, and the box says nothing changed. Nobody else ever saw it. In [push mode](/on-vercel) the reverts are pushed too, so the remote ends up where it started.
 
 ## 6. the new build is swapped in
 

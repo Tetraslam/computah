@@ -23,8 +23,8 @@ Try a few callers and see what the runner tells them:
 
 - **Who someone is** comes from `identity`, and nowhere else. Visitors never see the box, and the runner refuses their requests even if they send them by hand.
 - **A change must come from the app's own pages.** The runner checks that the page asking is on the same address as the app, and that the request carries the box's header and a JSON body. That stops another site from using a signed-in visitor's browser to send one.
-- **Members are fenced in.** A member's change only reaches their own version. `memberPaths` limits which files it may touch, `memberCheck` can refuse what it says, and a change that fails either is taken back out. Members get 20 requests a day unless you set `memberDailyLimit`, and `dailyLimit` caps them all together. Only owners can make a member's change everyone's.
-- **Guests' code stays in their browser.** On an app that takes [guests](/people-and-trust#guests), each changeable piece is loaded only in the browser, and `clientOnly()` refuses a change that would make it run on your server. A guest's changes run only in their own browser until an owner promotes one.
+- **Members are fenced in.** A member's change only reaches their own version. `memberPaths` limits which files it may touch, `memberCheck` can refuse what it says, and a change that fails either is taken back out. So is a change whose build fix breaks them. Members get 20 requests a day unless you set `memberDailyLimit`, and `dailyLimit` caps them all together. Only owners can make a member's change everyone's.
+- **Guests' code stays in their browser.** On an app that takes [guests](/guests), each changeable piece is loaded only in the browser, and `clientOnly()` refuses a change that would make it run on your server. A guest's changes run only in their own browser until an owner promotes one.
 - **The agent can work in a [sandbox](/sandboxes).** It gets a copy of the code without your ignored files, and only a patch comes back.
 - **Requests are bounded.** A request can be up to 4000 characters, and the agent gets 15 minutes before it's stopped.
 

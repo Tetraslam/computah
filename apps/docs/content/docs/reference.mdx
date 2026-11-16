@@ -15,7 +15,7 @@ import { Computah } from "@tetraslam13/computah";
 | `title` | `"improvements"` | the window's title |
 | `launcher` | `true` | show the small button that opens it |
 | `defaultOpen` | `false` | start open |
-| `endpoint` | found for you | where the runner is. Without it, the box asks the page's own address at `/__computah` first (a runner serving the app), then tries `http://127.0.0.1:4821` |
+| `endpoint` | found for you | where the runner is. Without it, the box asks the page's own address at `/__computah` first (a runner serving the app). On a page served from this machine (`localhost`, `127.0.0.1`) it then tries `http://127.0.0.1:4821`. Anywhere else, with no runner found, the box doesn't show at all |
 | `secret` | none | sent as a bearer token, for a runner started with `--secret` |
 
 Try a `hotkey`:
@@ -62,8 +62,8 @@ Its default export is read by `computah serve`.
 | `agentEnv` | | extra environment variables for the agent |
 | `release` | build and serve here | `{ push: { ... } }` to push changes to a host instead, below |
 | `repairs` | `3` | how many times the agent may try to fix a change that doesn't build |
-| `sandbox` | none | `{ in: exeSandbox() }` to run the agent in a [sandbox](/sandboxes). Members only, unless `for: "everyone"` |
-| `guests` | none | `{ secret, forgetMs }` to let people who aren't signed in take part as [guests](/people-and-trust#guests). Needs `trust.members: "everyone"` |
+| `sandbox` | none | run the agent in a [sandbox](/sandboxes), below |
+| `guests` | none | let people who aren't signed in take part as [guests](/guests), below |
 | `maxCopies` | no limit | the most personal copies running at once. Starting one more stops the one used longest ago |
 
 ### `app`
@@ -89,8 +89,9 @@ Each command runs in a shell, in the app's folder, with `PORT` set.
 | `trusted` | nobody | the same, for trusted people |
 | `members` | nobody | a list, or `"everyone"` who is signed in |
 | `memberPaths` | anything | files a member's change may touch, as globs from the repository's root |
-| `memberNote` | none | what members may change, in plain words. The agent is told it, and members see it in the box |
-| `memberCheck` | none | `(files) => reason or null`, given each changed file's path and new contents. `clientOnly()` is one |
+| `memberNote` | none | what members may change, in a sentence for them. Shown in their box |
+| `memberRules` | `memberNote` | rules for a member's change beyond `memberPaths`, for the agent |
+| `memberCheck` | none | `(files: { path, content }[]) => string or null`: given each changed file's new contents (`null` for a deleted file), say why the change isn't acceptable, or `null`. `clientOnly()` is one |
 | `memberDailyLimit` | `20` | requests a member may send per day |
 | `dailyLimit` | no limit | requests all members together may send per day |
 
@@ -102,6 +103,36 @@ Each command runs in a shell, in the app's folder, with `PORT` set.
 | `branch` | `"main"` | the branch the host serves to everyone |
 | `host` | none | who builds what's pushed. Without one, a change counts as live once the push lands |
 | `check` | `true` when `app.build` is set | build on the runner before pushing, to catch a broken build early |
+
+### `sandbox`
+
+| field | default | |
+| --- | --- | --- |
+| `in` | required | a `Sandbox`: `exeSandbox()`, `modalSandbox()`, or [your own](/sandboxes) |
+| `for` | `"members"` | `"members"` sandboxes everyone who isn't an owner or trusted. `"everyone"` sandboxes every request |
+
+### `guests`
+
+Needs `trust.members: "everyone"`.
+
+| field | default | |
+| --- | --- | --- |
+| `secret` | required | signs the cookie that remembers each guest |
+| `forgetMs` | never | remove a guest's version once they've been away this long |
+
+## server helpers
+
+All from `@tetraslam13/computah/server`.
+
+| helper | |
+| --- | --- |
+| `clientOnly({ imports })` | a `memberCheck`: every changed file must start with `"use client"`, must not contain `"use server"`, may not be deleted, may not load code by a computed name, and may import only `imports` (default `["react"]`) |
+| `exeSandbox(options)` | a sandbox on exe.dev. Options `egress`, `setup`, `ssh`, `prefix`: see [sandboxes](/sandboxes) |
+| `modalSandbox(options)` | a sandbox on Modal. Options `app`, `image`, `build`, `secrets`, `blockNetwork`, `timeoutMs`: see [sandboxes](/sandboxes) |
+| `vercel(options)` | a host. `projectId` (required), `teamId`, `token` (default `VERCEL_TOKEN`), `timeoutMs` (10 minutes), `startTimeoutMs` (90 seconds), `pollMs` (3 seconds) |
+| `gateway(secret)` | an identity that believes the app's own server, when it sends `secret`. Pairs with `createProxy` |
+| `header(idHeader, nameHeader)` | an identity read from headers set by a proxy you control |
+| `exe()`, `local()` | the identities behind `"exe"` and `"local"` |
 
 ## the route: `createProxy`
 
@@ -120,4 +151,4 @@ It returns `{ GET, POST }`.
 
 ## what the server entry exports
 
-From `@tetraslam13/computah/server`: the agents `claude`, `opencode`, `codex` and `agents`; the identities `exe`, `local`, `header` and `gateway`; the member check `clientOnly`; the host `vercel`; the sandboxes `exeSandbox` and `modalSandbox`; and, for building your own runner, `Computah`, `Site`, `serve`, `createRunnerServer`, `createFrontServer` and `buildPrompt`, with their types.
+From `@tetraslam13/computah/server`: the agents `claude`, `opencode`, `codex` and `agents`; the identities `exe`, `local`, `header` and `gateway`; the member check `clientOnly`; the host `vercel`; the sandboxes `exeSandbox` and `modalSandbox`; types for writing your own parts, such as `Trust`, `Person`, `Identity`, `Sandbox`, `SandboxSession`, `Host` and `PushOptions`; and, for building your own runner, `Computah`, `Site`, `serve`, `createRunnerServer`, `createFrontServer` and `buildPrompt`, with their types.

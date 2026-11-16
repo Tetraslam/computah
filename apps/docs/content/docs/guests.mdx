@@ -1,0 +1,70 @@
+---
+title: letting anyone change it
+description: guests change chosen pieces of a public app, each in a version only they see
+---
+
+For a public app, you can let people who aren't signed in change a few chosen pieces. Each of them gets a version of the app that only they see. Nothing they make reaches anyone else until an owner promotes it.
+
+```js title="computah.config.mjs"
+import { clientOnly, exeSandbox } from "@tetraslam13/computah/server";
+
+export default {
+  // ...
+  guests: { secret: process.env.COMPUTAH_GUEST_SECRET, forgetMs: 24 * 60 * 60 * 1000 },
+  trust: {
+    owners: ["you@example.com"],
+    members: "everyone",
+    memberPaths: ["app/playground/*.tsx"],
+    // each piece must stay a browser-only component that imports only react
+    memberCheck: clientOnly(),
+    memberNote: "you can change the framed parts of each page.",
+    // for the agent
+    memberRules: 'each piece keeps "use client" first, takes no props, and imports only react.',
+    memberDailyLimit: 10,
+    dailyLimit: 200,
+  },
+  sandbox: { in: exeSandbox() },
+  maxCopies: 6,
+};
+```
+
+## what each part does
+
+- **`guests`** turns it on. Someone who isn't signed in opens the box and becomes a guest: a random name kept in a cookie signed with `secret`, so nobody can pretend to be another guest. A guest is a member like any other. `forgetMs` removes a guest's version once they've been away that long.
+- **`members: "everyone"`** is required. Without it, a guest is a visitor and can't do anything.
+- **`memberPaths`** is the files a guest's change may touch. Keep it to the changeable pieces.
+- **`memberCheck: clientOnly()`** refuses a change that stops being a client component (`"use client"` first), declares server code, or imports anything but `react`. Pass `clientOnly({ imports: ["react", "..."] })` to allow more.
+- **`memberNote`** is shown to people, at the bottom of their box. **`memberRules`** is given to the agent; without it, the agent gets `memberNote`.
+- **`memberDailyLimit`** is how many requests one person may send in a day (20 unless you say). **`dailyLimit`** caps everyone together.
+- **`maxCopies`** caps how many personal copies run at once. Starting one more stops the one used longest ago.
+- **`sandbox`** runs a guest's agent on a throwaway machine. See [sandboxes](/sandboxes).
+
+## what keeps this safe
+
+- **A guest's code never runs on your server.** Load each changeable piece with `next/dynamic` and `ssr: false`, from a wrapper outside `memberPaths`. `clientOnly()` rejects a change that stops being a client component, declares server code, or imports anything but `react`.
+- **A guest's code runs only in their own browser.** Their changes live in their own version until an owner promotes one.
+- **A guest's agent sees only a copy of the code.** With a sandbox it runs on a throwaway machine, without your ignored files.
+- **Costs are capped.** Per-person and whole-app daily limits, a cap on running copies, and forgotten guests are cleaned up.
+
+A fix for a change that doesn't build is held to the same `memberPaths` and `memberCheck` as the change itself.
+
+## this site works this way
+
+The framed "yours to change" windows on these cards are files in `apps/docs/playground`. Each one is loaded by `apps/docs/components/playground.tsx` with `next/dynamic` and `ssr: false`, inside an error boundary, so a piece that breaks says so instead of taking the card down. The site is served with [`computah.docs.config.mjs`](https://github.com/tetraslam/computah/blob/main/computah.docs.config.mjs) at the root of the repository. In short:
+
+```js title="computah.docs.config.mjs"
+guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000 } : undefined,
+trust: {
+  owners: list(process.env.COMPUTAH_OWNERS ?? "you"),
+  trusted: list(process.env.COMPUTAH_TRUSTED),
+  members: guestSecret ? "everyone" : undefined,
+  memberPaths: ["apps/docs/playground/*.tsx"],
+  memberCheck: clientOnly(),
+  memberNote: "you can change the framed parts of each page. only you see your version.",
+  memberRules: "...", // one piece per page, "use client" first, no props, only react
+  memberDailyLimit: 12,
+  dailyLimit: 150,
+},
+sandbox: process.env.COMPUTAH_SANDBOX === "exe" ? { in: exeSandbox() } : undefined,
+maxCopies: 5,
+```
