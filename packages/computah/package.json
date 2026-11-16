@@ -1,0 +1,30 @@
+{
+  "name": "computah",
+  "version": "0.1.0",
+  "description": "An improvements box for your app: type a change, and a coding agent you already have makes it.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist", "README.md"],
+  "bin": { "computah": "./dist/cli.js" },
+  "exports": {
+    ".": { "types": "./dist/react/index.d.ts", "default": "./dist/react/index.js" },
+    "./server": { "types": "./dist/server/index.d.ts", "default": "./dist/server/index.js" },
+    "./next": { "types": "./dist/next.d.ts", "default": "./dist/next.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": { "react": ">=18", "react-dom": ">=18" },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vitest": "latest"
+  }
+}

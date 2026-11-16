@@ -1,0 +1,17 @@
+{
+  "name": "computah-workspace",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter computah build && pnpm --filter demo dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "typescript": "latest"
+  }
+}
