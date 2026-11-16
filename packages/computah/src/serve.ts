@@ -7,6 +7,7 @@ import { type AgentName, agents } from "./server/agents.js";
 import type { AppCommands } from "./server/app.js";
 import { createFrontServer } from "./server/front.js";
 import { exe, type Identity, local, type Trust } from "./server/identity.js";
+import type { Sandbox } from "./server/sandbox.js";
 import { type PushOptions, Site } from "./server/site.js";
 import type { Agent } from "./server/types.js";
 
@@ -28,7 +29,8 @@ export interface Config {
   /** How a change reaches people. Leave out to build and serve on this machine. */
   release?: { push: PushOptions };
   /** How many times the agent may try to fix a change that doesn't build. Default 3. */
-  repairs?: number;
+  repairs?: number /** Run the agent in a sandbox: `{ in: exeSandbox() }`, for members only unless `for: "everyone"`. */;
+  sandbox?: { in: Sandbox; for?: "members" | "everyone" };
 }
 
 export async function serveSite(argv: string[]): Promise<never> {
@@ -58,6 +60,7 @@ export async function serveSite(argv: string[]): Promise<never> {
     agentEnv: config.agentEnv,
     release: config.release,
     repairs: config.repairs,
+    sandbox: config.sandbox,
   });
   const port = Number(values.port ?? config.port ?? 8000);
   const host = config.host ?? "0.0.0.0";

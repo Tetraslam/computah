@@ -51,6 +51,22 @@ export async function snapshot(cwd: string): Promise<string> {
   }
 }
 
+/** A snapshot's files as a tar archive, for copying the code somewhere else. */
+export function archive(cwd: string, tree: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile("git", ["archive", "--format=tar", tree], { cwd, encoding: "buffer", maxBuffer: 512 * 1024 * 1024 }, (error, stdout) => {
+      if (error) reject(new GitError("Couldn't pack the code."));
+      else resolve(stdout);
+    });
+  });
+}
+
+/** Apply a patch made elsewhere against this same code. */
+export async function applyPatch(cwd: string, patch: string): Promise<void> {
+  if (!patch.trim()) return;
+  await git(cwd, ["apply", "--binary", "--whitespace=nowarn", "-"], undefined, patch);
+}
+
 /** Paths that differ between two snapshots. */
 export async function changedFiles(cwd: string, before: string, after: string): Promise<string[]> {
   const out = await git(cwd, ["diff", "--no-ext-diff", "--name-only", "-z", before, after]);

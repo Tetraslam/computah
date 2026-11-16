@@ -3,9 +3,22 @@ import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { changedFiles, commitFiles, excludeLocally, GitError, repoRoot, restore, revertCommit, run, snapshot } from "./git.js";
+import {
+  applyPatch,
+  archive,
+  changedFiles,
+  commitFiles,
+  excludeLocally,
+  GitError,
+  repoRoot,
+  restore,
+  revertCommit,
+  run,
+  snapshot,
+} from "./git.js";
 import { outsidePaths } from "./identity.js";
 import { buildPrompt, buildRepairPrompt } from "./prompt.js";
+import { runInSandbox, type Sandbox } from "./sandbox.js";
 import type { Agent, Job, JobContext, JobEvent, JobEventBody } from "./types.js";
 
 export interface ComputahOptions {
@@ -23,6 +36,8 @@ export interface ComputahOptions {
   env?: NodeJS.ProcessEnv;
   /** Globs a job's changes must stay inside, or undefined for anywhere. A job that strays is rolled back. */
   allowedPaths?: (job: Job) => string[] | undefined;
+  /** Where to run the agent for a job, other than on this machine. Return nothing to run it here. */
+  sandbox?: (job: Job) => Sandbox | undefined;
   /** Called when a job starts working. */
   onStart?: (job: Job) => void | Promise<void>;
   /**
@@ -63,6 +78,8 @@ export class Computah {
     id: string;
     child: ChildProcess | null;
     cancelled: boolean;
+    /** Stops an agent that is running somewhere else. */
+    away?: () => Promise<void>;
   } | null = null;
 
   constructor(private options: ComputahOptions) {
@@ -157,6 +174,7 @@ export class Computah {
     } else if (job.state === "working" && this.current?.id === id) {
       this.current.cancelled = true;
       killTree(this.current.child);
+      void this.current.away?.();
     }
     return job;
   }
@@ -366,6 +384,8 @@ export class Computah {
     args: string[],
     stdin: string | undefined,
   ): Promise<{ summary: string; failed?: string }> {
+    const sandbox = this.options.sandbox?.(job);
+    if (sandbox) return this.runAway(job, current, sandbox, { command, args, stdin });
     return new Promise((resolve) => {
       let lastText = "";
       let result = "";
@@ -425,6 +445,56 @@ export class Computah {
         else done();
       });
     });
+  }
+
+  /** Run the agent in a sandbox on a copy of the code, then bring its changes back as a patch. */
+  private async runAway(
+    job: Job,
+    current: NonNullable<Computah["current"]>,
+    sandbox: Sandbox,
+    agent: { command: string; args: string[]; stdin?: string },
+  ): Promise<{ summary: string; failed?: string }> {
+    let lastText = "";
+    let result = "";
+    let agentError = "";
+    let session: Awaited<ReturnType<Sandbox["open"]>> | null = null;
+    const timer = setTimeout(
+      () => {
+        agentError = "It took too long and was stopped.";
+        void session?.close();
+      },
+      this.options.timeoutMs ?? 15 * 60_000,
+    );
+    try {
+      await this.emit(job.id, { type: "tool", name: "sandbox", detail: `starting a ${sandbox.name} sandbox` });
+      session = await sandbox.open();
+      current.away = () => session?.close() ?? Promise.resolve();
+      if (current.cancelled) return { summary: "" };
+      const tar = await archive(this.root, await snapshot(this.root));
+      const outcome = await runInSandbox(session, tar, agent, (line) => {
+        for (const event of this.options.agent.parse(line)) {
+          if (event.type === "result") result = event.text;
+          else if (event.type === "error") agentError = event.message;
+          else {
+            if (event.type === "text") lastText = event.text;
+            void this.emit(job.id, event);
+          }
+        }
+      });
+      if (current.cancelled) return { summary: "" };
+      if (agentError) return { summary: "", failed: agentError };
+      if (outcome.code !== 0)
+        return { summary: "", failed: outcome.stderr.trim().split("\n").pop() || `${agent.command} exited with code ${outcome.code}.` };
+      await applyPatch(this.root, outcome.patch);
+      return { summary: (result || lastText).trim() };
+    } catch (error) {
+      if (current.cancelled) return { summary: "" };
+      return { summary: "", failed: agentError || (error instanceof Error ? error.message : "The sandbox failed.") };
+    } finally {
+      clearTimeout(timer);
+      current.away = undefined;
+      await session?.close().catch(() => {});
+    }
   }
 }
 

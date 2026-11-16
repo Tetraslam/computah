@@ -7,6 +7,7 @@ import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
 import { type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
+import type { Sandbox } from "./sandbox.js";
 import type { Agent, Job, JobContext } from "./types.js";
 
 export interface SiteOptions {
@@ -24,6 +25,11 @@ export interface SiteOptions {
   agentEnv?: NodeJS.ProcessEnv;
   /** How many times the agent may try to fix a change that doesn't build. Default 3. */
   repairs?: number;
+  /**
+   * Run the agent away from this machine, on a copy of the code. `for: "members"` (the default)
+   * sandboxes only people who aren't owners or trusted; `"everyone"` sandboxes every request.
+   */
+  sandbox?: { in: Sandbox; for?: "members" | "everyone" };
   /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
   lingerMs?: number;
   /**
@@ -398,6 +404,11 @@ export class Site {
       dataDir: join(this.root, DATA, "jobs", id),
       allowedPaths: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberPaths : undefined),
       onStart: (job) => void this.startLive(version, job),
+      sandbox: (job) => {
+        const rule = this.options.sandbox;
+        if (!rule) return undefined;
+        return rule.for === "everyone" || this.level(job.by ?? null) === "member" ? rule.in : undefined;
+      },
       verify: (job) => this.afterChange(version, job),
       repairs: this.options.repairs,
       // In push mode the failed commits already reached the remote, so their reverts must follow them.

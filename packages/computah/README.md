@@ -163,6 +163,28 @@ and the box points at it: `<Computah endpoint="/api/computah" />`.
 
 Another host is one function: `deployed({ sha, branch, production })` waits for the build and returns its address, or throws with the build log.
 
+## Sandboxes
+
+By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead: the code is copied in (without ignored files, so no `.env`), the agent works there, and only a patch of what it changed comes back.
+
+```js
+import { exeSandbox } from "@tetraslam13/computah/server";
+
+export default {
+  // ...
+  sandbox: { in: exeSandbox() }, // members only. add `for: "everyone"` to sandbox owners too
+};
+```
+
+| sandbox          | what it is                                                                                | what it needs                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `exeSandbox()`   | a standalone exe.dev VM per request, cut off from the internet except exe's model gateway | an ssh key exe.dev knows, on the runner's machine                                 |
+| `modalSandbox()` | a Modal Sandbox per request                                                               | the `modal` package, Modal credentials, and a Modal Secret holding your model key |
+
+Measured: on exe, a real Claude Code change took 12 seconds end to end, about 5 of them starting the VM. On Modal, the first sandbox took 113 seconds while the image built, and 2 seconds after that.
+
+While the agent is in a sandbox there is no live preview: its changes arrive all at once when it finishes.
+
 ## Adapters
 
 | kind     | built in                                   | your own                                 |
@@ -171,12 +193,13 @@ Another host is one function: `deployed({ sha, branch, production })` waits for 
 | identity | `exe`, `local`, `header(name)`             | a function from request to person        |
 | app      | any install, build, start and dev commands |                                          |
 | host     | `vercel`                                   | an object with `deployed()`              |
+| sandbox  | `exeSandbox`, `modalSandbox`               | an object with `open()`                  |
 
 ## Not done yet
 
 - The Vercel adapter has run against a real Vercel project with a scripted agent: a production deploy, a preview for a member, and a failed build that was fixed. The app-side route has only run in tests.
-- The agent runs on a machine you keep running. There is no adapter for a sandbox that starts per request.
-- A member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while working.
+- Without a sandbox, a member's agent runs with the same access to the machine as an owner's. With one, the agent is contained, but the code it writes still runs on the serving machine once built.
+- The Modal sandbox has only run with a scripted agent. A real agent there needs a model key in a Modal Secret, which hasn't been tried.
 - When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.
 
 ## Develop

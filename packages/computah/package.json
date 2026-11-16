@@ -36,12 +36,14 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "modal": ">=0.11"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "modal": "^0.11.1",
     "react": "latest",
     "react-dom": "latest",
     "vitest": "latest"
@@ -63,5 +65,10 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependenciesMeta": {
+    "modal": {
+      "optional": true
+    }
   }
 }
