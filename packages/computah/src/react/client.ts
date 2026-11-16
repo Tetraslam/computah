@@ -38,7 +38,7 @@ export interface Info {
   ownUrl?: string;
 }
 
-/** Find the runner: the app's own address if the runner is serving it, otherwise this machine. */
+/** Find the runner: the app's own address if the runner is serving it, otherwise this machine. Empty when there is none. */
 export async function findEndpoint(): Promise<string> {
   try {
     const response = await fetch(`${SERVED_ENDPOINT}/me`, { cache: "no-store" });
@@ -46,7 +46,9 @@ export async function findEndpoint(): Promise<string> {
   } catch {
     // Not served by a runner.
   }
-  return DEFAULT_ENDPOINT;
+  // A development runner lives on this machine, so only a page served from this machine looks for one.
+  // Anywhere else there is no runner to find, and a visitor's browser shouldn't go poking at their localhost.
+  return /^(localhost|127\.0\.0\.1|\[::1\]|.*\.localhost)$/.test(window.location.hostname) ? DEFAULT_ENDPOINT : "";
 }
 
 /** A thin client for the runner's HTTP API. */

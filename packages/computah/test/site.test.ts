@@ -192,8 +192,9 @@ describe("a served app", () => {
   it("undo rebuilds without the change", async () => {
     const job = await ask("olive", "temporary");
     expect(await page()).toBe("hello\ntemporary\n");
-    expect((await post("tess", `/jobs/${job.id}/undo`)).status).toBe(404);
-    expect((await post("olive", `/jobs/${job.id}/undo`)).status).toBe(200);
+    // A member can't undo it; a trusted person can, since they could change it anyway.
+    expect((await post("mel", `/jobs/${job.id}/undo`)).status).toBe(404);
+    expect((await post("tess", `/jobs/${job.id}/undo`)).status).toBe(200);
     expect(await page()).toBe("hello\n");
   });
 

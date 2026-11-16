@@ -1,3 +1,11 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+# Install scripts that are allowed to run. esbuild fetches its binary; the others have fallbacks we don't need.
+allowBuilds:
+  esbuild: true
+  cbor-extract: false
+  protobufjs: false
+  sharp: false
+  unrs-resolver: false

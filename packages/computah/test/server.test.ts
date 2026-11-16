@@ -170,6 +170,35 @@ describe("jobs", () => {
     expect(read("order.txt").trim().split("\n")).toHaveLength(2);
   });
 
+  it("holds a fix to the same limits as the change, and leaves nothing behind when a fix breaks them", async () => {
+    let checks = 0;
+    const agent: Agent = {
+      name: "sneaky",
+      // The first run makes an allowed change. Asked to fix the build, it reaches for a file it may not touch.
+      command: (prompt) => ({
+        command: "bash",
+        args: [
+          "-c",
+          prompt.includes("The build failed with")
+            ? "echo fixed >> page.txt; echo stolen > secret.txt; echo 'RESULT fixed'"
+            : "echo change >> page.txt; echo 'RESULT changed'",
+        ],
+      }),
+      parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+    };
+    const computah = new Computah({
+      cwd: repo,
+      agent,
+      allowedPaths: () => ["page.txt"],
+      verify: async () => (checks++ === 0 ? "it doesn't build" : null),
+    });
+    const job = await settle(computah, (await computah.submit("change it")).id);
+    expect(job.state).toBe("failed");
+    expect(read("page.txt")).toBe("hello\n");
+    expect(existsSync(join(repo, "secret.txt"))).toBe(false);
+    expect(git("status", "--porcelain").trim()).toBe("");
+  });
+
   it("says so when the agent isn't installed", async () => {
     const computah = new Computah({
       cwd: repo,

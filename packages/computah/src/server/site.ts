@@ -310,7 +310,9 @@ export class Site {
       const level = this.level(person);
       const theirs = !!person && job.by?.id === person.id;
       const visible = level === "owner" || theirs || (version === this.main && level !== "visitor");
-      if (!visible || (toChange && level !== "owner" && !theirs)) break;
+      // Owners may act on anything. Trusted people may act on everyone's version, which they can change anyway.
+      const mayChange = level === "owner" || theirs || (level === "trusted" && version === this.main);
+      if (!visible || (toChange && !mayChange)) break;
       return { version, job };
     }
     throw new RequestError("No such request.", 404);

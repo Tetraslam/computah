@@ -350,6 +350,8 @@ export function Computah({
   };
 
   if (!root) return null;
+  // No runner to talk to (a deployed page that nothing serves through computah): show nothing.
+  if (box.endpoint === "") return null;
   // Someone who can't change the app never sees the box.
   if (box.served && (!box.info || level === "visitor")) return null;
 

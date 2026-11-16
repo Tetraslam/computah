@@ -207,10 +207,10 @@ export default {
 };
 ```
 
-| sandbox | what it is | what it needs |
-| --- | --- | --- |
-| `exeSandbox()` | a standalone exe.dev VM per request, cut off from the internet except exe's model gateway | an ssh key exe.dev knows, on the runner's machine |
-| `modalSandbox()` | a Modal Sandbox per request | the `modal` package, Modal credentials, and a Modal Secret holding your model key |
+| sandbox          | what it is                                                                                | what it needs                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `exeSandbox()`   | a standalone exe.dev VM per request, cut off from the internet except exe's model gateway | an ssh key exe.dev knows, on the runner's machine                                 |
+| `modalSandbox()` | a Modal Sandbox per request                                                               | the `modal` package, Modal credentials, and a Modal Secret holding your model key |
 
 Measured: on exe, a real Claude Code change took 12 seconds end to end, about 5 of them starting the VM. On Modal, the first sandbox took 113 seconds while the image built, and 2 seconds after that.
 

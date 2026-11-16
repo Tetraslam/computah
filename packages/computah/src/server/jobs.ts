@@ -378,9 +378,14 @@ export class Computah {
         if (repaired.summary) job.summary = repaired.summary;
         const now = await snapshot(this.root);
         const fixed = (await changedFiles(this.root, job.after, now)).filter((file) => !file.startsWith(`${DATA_DIR}/`));
-        job.after = now;
         if (!fixed.length) break;
-        if (outsidePaths(fixed, this.options.allowedPaths?.(job)).length) break;
+        // A fix is held to the same limits as the change it fixes. One that breaks them is dropped
+        // before anything else happens, so the commits underneath can be reverted cleanly.
+        if (outsidePaths(fixed, this.options.allowedPaths?.(job)).length || (this.options.check && (await this.objection(job, fixed)))) {
+          await restore(this.root, job.after, now).catch(() => {});
+          break;
+        }
+        job.after = now;
         job.files = [...new Set([...job.files, ...fixed])];
         const commit = await commitFiles(
           this.root,

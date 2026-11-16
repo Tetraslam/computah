@@ -180,6 +180,7 @@ export function useBox(options: ClientOptions & { active: boolean }) {
     refusal,
     agent,
     info,
+    endpoint,
     served,
     jobs,
     sending,
