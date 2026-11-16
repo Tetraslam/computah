@@ -435,7 +435,8 @@ export class Site {
       env: this.options.agentEnv,
       dataDir: join(this.root, DATA, "jobs", id),
       allowedPaths: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberPaths : undefined),
-      limitsNote: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberNote : undefined),
+      limitsNote: (job) =>
+        this.level(job.by ?? null) === "member" ? (this.options.trust.memberRules ?? this.options.trust.memberNote) : undefined,
       check: (job, files) => (this.level(job.by ?? null) === "member" ? (this.options.trust.memberCheck?.(files) ?? null) : null),
       onStart: (job) => void this.startLive(version, job),
       sandbox: (job) => this.sandboxFor(job),

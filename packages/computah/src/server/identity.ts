@@ -76,8 +76,10 @@ export interface Trust {
   members?: string[] | "everyone";
   /** Files a member's change may touch, as globs relative to the repo root. Default: anything. */
   memberPaths?: string[];
-  /** Rules for members beyond `memberPaths`, in plain words. The agent is told them. */
+  /** What members may change, in a sentence for them. Shown in their box. */
   memberNote?: string;
+  /** Rules for a member's change beyond `memberPaths`, for the agent. Defaults to `memberNote`. */
+  memberRules?: string;
   /**
    * Look at a member's change and object to it: given each changed file's new contents, return why
    * it isn't acceptable, or null. See `clientOnly()` for a ready-made one.

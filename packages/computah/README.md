@@ -177,6 +177,7 @@ export default {
     memberPaths: ["app/playground/*.tsx"],
     memberCheck: clientOnly(), // each piece must stay a browser-only component that imports only react
     memberNote: "you can change the framed parts of each page.",
+    memberRules: 'each piece keeps "use client" first, takes no props, and imports only react.', // for the agent
     memberDailyLimit: 10,
     dailyLimit: 200,
   },

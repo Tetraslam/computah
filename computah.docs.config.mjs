@@ -33,7 +33,8 @@ export default {
     // check keeps them that way, so a visitor's code never runs on the server.
     memberPaths: ["apps/docs/playground/*.tsx"],
     memberCheck: clientOnly(),
-    memberNote:
+    memberNote: "you can change the framed parts of each page. only you see your version.",
+    memberRules:
       'Each of those files is one self-contained piece of a page. It must keep "use client" as its first line, export a default React component that takes no props, and import nothing except react. Change only the piece that belongs to the page they were on (the file is named after the page; the home page is home.tsx).',
     memberDailyLimit: 12,
     dailyLimit: 150,
