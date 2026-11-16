@@ -304,6 +304,22 @@ export function Computah({
     window.location.reload();
   }, [box.served, working, box.info?.live, box.jobs]);
 
+  // Their own version is still being put together and they're on everyone's meanwhile: keep
+  // asking, and move them onto theirs the moment it's ready.
+  const waiting = box.served && !!box.info?.waiting;
+  const wasWaiting = useRef(false);
+  useEffect(() => {
+    if (!waiting) {
+      if (wasWaiting.current && !draftRef.current.trim()) window.location.reload();
+      wasWaiting.current = false;
+      return;
+    }
+    wasWaiting.current = true;
+    const refresh = box.refresh;
+    const timer = setInterval(() => void refresh(), 1500);
+    return () => clearInterval(timer);
+  }, [waiting, box.refresh]);
+
   const send = async () => {
     const text = draft.trim();
     if (!text || box.sending || box.connection !== "ready") return;
@@ -514,6 +530,12 @@ export function Computah({
                   </button>
                 </div>
               </form>
+              {waiting && (
+                <p className="footer" role="status">
+                  <span className="mark-working" aria-hidden="true" />
+                  getting your version ready. this is everyone's for a moment.
+                </p>
+              )}
               {box.info?.note && <p className="footer">{box.info.note}</p>}
               {pushed && box.info?.ownUrl && (
                 <p className="footer">

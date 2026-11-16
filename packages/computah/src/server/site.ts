@@ -98,6 +98,8 @@ export interface Me {
   /** Whether they're on the hot-reloading copy right now. */
   live: boolean;
   stale: boolean;
+  /** True while their own version is being built or started and they're being shown everyone's meanwhile. */
+  waiting: boolean;
   /** True for someone not signed in who could take part as a guest by asking. */
   canJoin: boolean;
   /** For a member: what they're allowed to change, in the owner's words. */
@@ -229,6 +231,12 @@ export class Site {
       return { port: version.live.process.port, live: true, copy: this.name(version.live.process) };
     }
     if (!version.release || version.release.process.exited) {
+      // If their copy still has to be built, don't make them wait for it: show everyone's version
+      // meanwhile. The box tells them, and moves them over when theirs is ready.
+      if (version !== this.main && !(await this.isBuilt(version))) {
+        if (!version.building) void this.ensureRelease(version).catch(() => {});
+        return this.target(null);
+      }
       try {
         await this.ensureRelease(version);
       } catch {
@@ -269,6 +277,7 @@ export class Site {
       stale: !!mine?.stale,
       mode: this.push ? "push" : "swap",
       canJoin: !person && !!this.options.guests,
+      waiting: !!mine && !wantsMain && !this.push && (!mine.release || mine.release.process.exited) && !this.isLive(mine, person),
       note: level === "member" ? this.options.trust.memberNote : undefined,
       ownUrl: mine?.url,
       proposals,
@@ -409,7 +418,14 @@ export class Site {
       try {
         await this.git(version.workDir, ["merge", "--no-edit", "--no-gpg-sign", MAIN]);
         version.stale = false;
-        if (this.push ? !!version.url : version.release && !version.release.process.exited) void this.release(version).catch(() => {});
+        if (this.push) {
+          if (version.url) void this.release(version).catch(() => {});
+        } else if (version.release && !version.release.process.exited) {
+          void this.release(version).catch(() => {});
+        } else {
+          // Nobody is on this copy right now. Build it anyway, so it's ready when they come back.
+          this.prebuild(version);
+        }
       } catch {
         // It conflicts. Leave their version as it was for now; the agent sorts it out when they next show up.
         await this.git(version.workDir, ["merge", "--abort"]).catch(() => "");
@@ -657,12 +673,19 @@ export class Site {
     if (!production) await this.savePeople();
   }
 
-  private async build(version: Version) {
-    if (this.push) return this.pushOut(version, this.push);
+  private releaseDir(version: Version, sha: string) {
+    return join(this.root, DATA, "releases", `${version.id}-${sha.slice(0, 10)}`);
+  }
+
+  /** Whether the version's latest commit is already built and only needs starting. */
+  private async isBuilt(version: Version) {
+    return existsSync(join(this.releaseDir(version, await this.head(version)), ".computah-built"));
+  }
+
+  /** Build a commit into its own folder without starting it. Starting it later takes a moment, not a build. */
+  private async prepare(version: Version, sha: string): Promise<string> {
     const { app } = this.options;
-    const sha = await this.head(version);
-    if (version.release?.sha === sha && !version.release.process.exited) return;
-    const dir = join(this.root, DATA, "releases", `${version.id}-${sha.slice(0, 10)}`);
+    const dir = this.releaseDir(version, sha);
     if (!existsSync(dir)) await this.git(this.root, ["worktree", "add", "--detach", dir, sha]);
     const built = join(dir, ".computah-built");
     if (!existsSync(built)) {
@@ -670,6 +693,29 @@ export class Site {
       if (app.build) await runStep(app.build, appDir(dir, app), app.env);
       await writeFile(built, "");
     }
+    return dir;
+  }
+
+  /** Build a version's latest commit ahead of time, in turn with other builds, so its person doesn't wait for it. */
+  private prebuild(version: Version) {
+    const building = this.builds
+      .then(async () => {
+        await this.prepare(version, await this.head(version));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (version.building === building) version.building = undefined;
+      });
+    version.building = building;
+    this.builds = building;
+  }
+
+  private async build(version: Version) {
+    if (this.push) return this.pushOut(version, this.push);
+    const { app } = this.options;
+    const sha = await this.head(version);
+    if (version.release?.sha === sha && !version.release.process.exited) return;
+    const dir = await this.prepare(version, sha);
     this.makeRoom(version);
     const process = await AppProcess.start(app.start, appDir(dir, app), app);
     const old = version.release;

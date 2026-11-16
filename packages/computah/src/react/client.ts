@@ -34,6 +34,7 @@ export interface Info {
   proposals?: { id: string; name: string; changes: string[] }[];
   mode?: "swap" | "push";
   canJoin?: boolean;
+  waiting?: boolean;
   note?: string;
   ownUrl?: string;
 }

@@ -188,6 +188,46 @@ describe("a served app", () => {
     expect(await page()).toBe("hello\n");
   });
 
+  it("builds people's versions ahead of time, and shows everyone's rather than making anyone wait for a build", async () => {
+    await ask("mel", "from mel");
+    site.stop();
+    // Everyone's version moves while the runner is down, so mel's copy will need a new build.
+    const main = join(repo, ".computah/work/main");
+    writeFileSync(join(main, "deployed.txt"), "deployed\n");
+    execFileSync("git", ["add", "-A"], { cwd: main });
+    execFileSync("git", ["commit", "-qm", "deploy"], { cwd: main });
+    const again = new Site({
+      cwd: repo,
+      agent,
+      // A build slow enough to catch mel arriving in the middle of it.
+      app: { build: "sleep 1.2 && cat page.txt deployed.txt > built.txt", start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: ["mel"] },
+    });
+    await again.init();
+    const front = createFrontServer(again);
+    await new Promise<void>((resolve) => front.listen(0, "127.0.0.1", resolve));
+    const at = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
+    const get = async (path: string) => fetch(`${at}${path}`, { headers: as("mel") });
+    try {
+      // Mid-build: mel gets everyone's version at once, and is told theirs is on the way.
+      const started = Date.now();
+      expect(await (await get("/")).text()).toBe("hello\ndeployed\n");
+      expect(Date.now() - started).toBeLessThan(600);
+      expect(((await (await get("/__computah/me")).json()) as { waiting: boolean }).waiting).toBe(true);
+      // Nobody asked for mel's page again, and it still gets built. Then it's theirs, with both changes.
+      for (let i = 0; i < 200; i++) {
+        if ((await (await get("/")).text()).includes("from mel")) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(await (await get("/")).text()).toBe("hello\nfrom mel\ndeployed\n");
+      expect(((await (await get("/__computah/me")).json()) as { waiting: boolean }).waiting).toBe(false);
+    } finally {
+      again.stop();
+      await new Promise<void>((resolve) => void front.close(() => resolve()));
+    }
+  }, 30_000);
+
   it("has the agent settle it when everyone's version and a member's change the same lines", async () => {
     await ask("mel", "from mel");
     await ask("olive", "from olive");
