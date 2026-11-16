@@ -1,6 +1,6 @@
 {
   "name": "@tetraslam13/computah",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An improvements box for your app: type a change, and a coding agent you already have makes it.",
   "license": "MIT",
   "type": "module",
@@ -11,7 +11,7 @@
     "LICENSE"
   ],
   "bin": {
-    "computah": "./dist/cli.js"
+    "computah": "dist/cli.js"
   },
   "exports": {
     ".": {
