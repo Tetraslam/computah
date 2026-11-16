@@ -1,0 +1,68 @@
+---
+title: on vercel
+description: push mode, for a host that can't run the runner
+---
+
+Vercel can't run the runner, so the runner lives on another machine with a clone of the repository. Each change is pushed to GitHub, and Vercel builds it like any other push.
+
+## on the runner
+
+```js title="computah.config.mjs"
+import { gateway, vercel } from "@tetraslam13/computah/server";
+
+export default {
+  app: { install: "pnpm install --frozen-lockfile", build: "pnpm build" },
+  identity: gateway(process.env.COMPUTAH_SECRET),
+  trust: { owners: ["you@example.com"], members: "everyone" },
+  release: { push: { branch: "main", host: vercel({ projectId: "prj_..." }) } }, // needs VERCEL_TOKEN
+};
+```
+
+There's no `start` here: the runner doesn't serve the app, Vercel does. `gateway` means "believe the app's own server about who is signed in, when it sends the shared secret". Run it with `computah serve`, somewhere the app's server can reach.
+
+## in the app
+
+One route passes the box's requests to the runner, and says who is signed in:
+
+```ts title="app/api/computah/[...path]/route.ts"
+import { createProxy } from "@tetraslam13/computah/next";
+
+export const { GET, POST } = createProxy({
+  runner: process.env.COMPUTAH_RUNNER!,
+  secret: process.env.COMPUTAH_SECRET!,
+  identify: async (request) => {
+    const user = await yourAuth(request);
+    return user && { id: user.id, name: user.email };
+  },
+});
+```
+
+`yourAuth` stands for however your app knows who is signed in. Return `null` for someone who isn't. Then point the box at the route:
+
+```tsx
+<Computah endpoint="/api/computah" />
+```
+
+The route only passes on a change that comes from your app's own pages, with the box's header. It uses nothing but the standard `Request` and `Response`, so it works in any framework that has them.
+
+## what happens to a change
+
+- **An owner's or a trusted person's change** is pushed to the branch Vercel serves. The box waits for the deployment and reloads.
+- **A member's change** is pushed to a branch of their own, `computah/u/` and their name. Vercel makes a preview of it, and the box links to it: "open your version".
+- **The build is checked first.** The runner builds the change itself before pushing (turn that off with `check: false`). If Vercel's build fails anyway, the end of its log goes to the agent to fix, the same as a [failed build](/how-a-change-travels) anywhere else.
+- **Someone else pushed in the meantime?** The runner takes their work in and pushes again, once. If it conflicts, the change doesn't go out.
+
+Vercel refuses to build a commit from an author it doesn't know. The runner commits with this machine's git email, so set that email to someone on the Vercel team. The name on the commit is still whoever asked.
+
+## what you give up
+
+- It takes as long as Vercel takes to build.
+- There's no live preview while you wait. Nobody watches the change happen.
+
+## another host
+
+A host is one function. `deployed({ sha, branch, production })` waits until the host has built that commit, and returns where it's served. If the build failed, it throws an error carrying the build's log, and the agent gets to fix it. See [adapters](/adapters).
+
+<Note title="not done yet">
+The Vercel adapter has run against a real Vercel project with a scripted agent: a production deploy, a preview for a member, and a failed build that was fixed. The app-side route has only run in tests.
+</Note>

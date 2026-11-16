@@ -1,0 +1,62 @@
+---
+title: on exe.dev
+description: a small machine whose login already knows who's visiting
+---
+
+[exe.dev](https://exe.dev) gives you a small always-on machine with a login in front of it. Its proxy tells the app who each signed-in visitor is, so the runner doesn't need a sign-in of its own. One word in the config uses it:
+
+```js title="computah.config.mjs"
+export default {
+  app: {
+    install: "pnpm install --frozen-lockfile",
+    build: "pnpm build",
+    start: "pnpm start",
+    dev: "pnpm dev",
+  },
+  identity: "exe",
+  trust: {
+    owners: ["you@example.com"],
+    members: "everyone",
+    memberPaths: ["app/**"],
+  },
+};
+```
+
+Then run `computah serve` on the machine and keep it running. The runner listens on port 8000 unless the config says otherwise.
+
+## how it knows who you are
+
+exe.dev's proxy sets two headers on every request from someone signed in: `x-exedev-userid` and `x-exedev-email`. The runner takes the first as the person's id and the second as their name, so you list people in `trust` by email. The proxy also removes those headers from anything a visitor sends, which is what makes them safe to believe.
+
+That last part only holds behind exe.dev's proxy. If the runner can be reached any other way, anyone can send those headers and claim to be you. Don't use `identity: "exe"` anywhere else.
+
+## this repository does it
+
+computah's own demo is served this way. Its config picks exe.dev's login when it runs there, and this machine only everywhere else:
+
+```js title="computah.config.mjs"
+// How the demo is served with a version per person. Run `pnpm serve` at the repo root.
+const owners = (process.env.COMPUTAH_OWNERS ?? "you").split(",").map((entry) => entry.trim());
+
+export default {
+  agent: process.env.COMPUTAH_AGENT,
+  model: process.env.COMPUTAH_MODEL,
+  port: Number(process.env.PORT ?? 8000),
+  app: {
+    dir: "apps/demo",
+    install: "pnpm install --frozen-lockfile && pnpm --filter @tetraslam13/computah build",
+    build: "pnpm build",
+    start: "pnpm exec next start",
+    dev: "pnpm exec next dev",
+  },
+  // On exe.dev its proxy says who each visitor is. Anywhere else, only this machine counts as you.
+  identity: process.env.COMPUTAH_IDENTITY === "exe" ? "exe" : "local",
+  trust: {
+    owners,
+    trusted: (process.env.COMPUTAH_TRUSTED ?? "").split(",").filter(Boolean),
+    members: "everyone",
+    // Members may change the demo's pages and nothing else.
+    memberPaths: ["apps/demo/app/**"],
+  },
+};
+```

@@ -1,0 +1,44 @@
+---
+title: how a change travels
+description: from the words you type to the app everyone is served
+---
+
+This is what happens when the runner serves the app. On your laptop, saving is releasing, so only the first steps apply. Walk through it here, then read each step below:
+
+<Playground name="how-a-change-travels" />
+
+## 1. it waits its turn
+
+Each version of the app has one queue. A request waits there until the one before it finishes, and its mark in the box shows a sparse dither while it waits.
+
+## 2. you watch it happen
+
+If the config has `app.dev`, the person who asked is moved onto a hot-reloading copy of the app as soon as the agent starts. Their page reloads once onto it, and from then on every file the agent saves shows up in front of them. Nobody else sees this copy. Everyone else keeps using the built app, untouched. When the agent works in a [sandbox](/sandboxes) there's nothing to watch: its changes arrive all at once when it finishes.
+
+## 3. the change is committed
+
+When the agent finishes, its change becomes one commit on that version's branch. If the change reached outside the files that person may touch, or the config's `memberCheck` refuses it, it's taken back out here instead.
+
+## 4. it's built
+
+The runner checks the commit out into a fresh folder, installs, builds, and starts it on a free port. It waits until the app answers at `/` (or the `app.health` path you set), for up to 90 seconds. Only one build runs at a time.
+
+## 5. if the build fails, the agent fixes it
+
+The agent is shown the build's error and asked to fix the build while keeping what the request asked for. The box says "It didn't build. Fixing it (try 1)." Each fix is its own commit. It gets up to three tries (`repairs` in the config changes that).
+
+If it still doesn't build, every commit the change made is reverted, and the box says nothing changed. Nobody else ever saw it.
+
+## 6. the new build is swapped in
+
+The next page anyone loads comes from the new build. A page that's already open keeps talking to the copy that served it: each page load is told which copy it came from, and everything that page fetches afterwards goes to that same copy. So nothing breaks halfway through a swap. The old copy keeps running for two minutes, then stops.
+
+The person who asked gets their page reloaded onto the new build. If they're in the middle of typing another request, the page isn't reloaded under them: the box says "your change is ready" with a link to show it.
+
+## undo
+
+Every finished change has an undo link. Undo reverts the change's commits (the fixes included) with new commits, then builds and swaps like any change. It never overwrites later work: if a later change touched the same lines, undo says so and changes nothing. While another change is in progress, undo asks you to wait for it to finish.
+
+## stop
+
+A request that's waiting or working can be stopped. A stopped request keeps none of its edits. A request that runs longer than 15 minutes is stopped for you.

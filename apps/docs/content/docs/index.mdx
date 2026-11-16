@@ -1,0 +1,42 @@
+---
+title: computah
+description: an improvements box for your app
+---
+
+You type what should change into a small window inside your app, and a coding agent you already have (Claude Code, OpenCode or Codex) changes the app's code while you watch.
+
+<Recording />
+
+## the two lines
+
+Put the box anywhere in a React app that lives in a git repository:
+
+```tsx
+import { Computah } from "@tetraslam13/computah";
+
+<Computah />;
+```
+
+Then run your dev server through `computah`, open the app, and press `Ctrl+.` (`⌘.` on a Mac):
+
+```sh
+computah -- next dev
+```
+
+The [start here](/start-here) card has the whole setup, install included.
+
+## this site is one too
+
+These docs are a computah app, and you can change parts of them. Anything framed like the window below is yours: open the box and say how it should be different. Only you see your version. If the owner likes what you made, they can make it everyone's.
+
+<Playground name="home" />
+
+The rest of each card is the owner's, and they change it the same way. Every change that reaches everyone's version is listed on the [changes](/changes) card, with what was typed. Nothing there is staged.
+
+The idea is Patrick Collison's: ["a freeform text input that's hooked up to an agent that yolo implements whatever is submitted."](https://x.com/patrickc/status/2116636967517798672) This is that, as a library.
+
+## the stack
+
+Use the arrows at the bottom of each card, or the arrow keys, to go card by card. Press `/` to find anything.
+
+<Contents />

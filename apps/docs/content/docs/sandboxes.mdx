@@ -1,0 +1,21 @@
+---
+title: sandboxes
+description: an agent that works somewhere other than your machine
+---
+
+By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead. The code is copied in, without your ignored files (so no `.env`), the agent works there, and only a patch of what it changed comes back.
+
+```js title="computah.config.mjs"
+import { exeSandbox } from "@tetraslam13/computah/server";
+
+export default {
+  // ...
+  sandbox: { in: exeSandbox() }, // members only. add `for: "everyone"` to sandbox owners too
+};
+```
+
+There are two built in, `exeSandbox()` and `modalSandbox()`. While the agent is in a sandbox there's no live copy to watch: its changes arrive all at once when it finishes.
+
+<Note title="not done yet">
+This card is short for now. More on choosing and setting up a sandbox is on its way. The Modal sandbox has only run with a scripted agent.
+</Note>

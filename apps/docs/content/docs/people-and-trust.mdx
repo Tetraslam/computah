@@ -1,0 +1,94 @@
+---
+title: people and trust
+description: who sees the box, and whose app a change goes into
+---
+
+When the runner serves the app, everyone who visits is one of four levels. The `identity` in the config says who someone is, and `trust` says which level they get.
+
+| level | what the box does for them |
+| --- | --- |
+| owner | changes the app for everyone, undoes anyone's change, and decides about other people's versions |
+| trusted | changes the app for everyone, and undoes their own changes |
+| member | changes a version of their own, which only they see. An owner can make it everyone's |
+| visitor | nothing. They never see the box, and the runner refuses them if they try anyway. If the app takes [guests](#guests), someone who isn't signed in becomes a member instead |
+
+Pick a level to see what it allows:
+
+<Playground name="people-and-trust" />
+
+## the trust part of the config
+
+```js
+trust: {
+  owners: ["you@example.com"],
+  trusted: ["friend@example.com"],
+  members: "everyone",
+  memberPaths: ["app/**"],
+  memberNote: "you can change the pages, not the layout.",
+  memberDailyLimit: 20,
+  dailyLimit: 200,
+},
+```
+
+- **`owners`** and **`trusted`** are lists of people. An entry matches a person's id or their name, ignoring case, so emails work.
+- **`members`** is either a list too, or `"everyone"` for anyone signed in. Leave it out and nobody is a member.
+- **`memberPaths`** limits which files a member's change may touch. They're globs from the root of the repository: `*` stays inside one folder, `**` crosses folders. A change that reaches outside them is taken back out. Leave it out and a member may change any file.
+- **`memberNote`** says, in plain words, what members may change. The agent is told it, and members see it at the bottom of their box.
+- **`memberCheck`** looks at a member's finished change and can refuse it: it gets each changed file's new contents and returns why the change isn't acceptable, or `null`. A refused change is taken back out. `clientOnly()` is a ready-made one, see [guests](#guests).
+- **`memberDailyLimit`** is how many requests a member may send in a day. It's 20 unless you say otherwise. **`dailyLimit`** caps all members together, and has no cap unless you set one.
+
+Anyone who is none of these is a visitor.
+
+## a version of your own
+
+A member's first request makes them a version of the app: a git branch named `computah/u/` and a short form of their name. Their changes go there, and only they are served it. A copy of it starts when they show up and stops after 20 minutes of nobody using it.
+
+Owners and trusted people can have one too. Their box has a "for everyone" switch, and pressing it changes it to "just for me".
+
+Whoever has a version of their own sees a line at the bottom of the box saying which version they're looking at, with a link to the other one.
+
+When everyone's version changes, the runner merges it into each person's version, so theirs stays current.
+
+<Note title="not done yet">
+If someone's own version conflicts with everyone's, it's marked as behind (their box says "yours is behind everyone's") and left alone. Nothing resolves the conflict yet.
+</Note>
+
+## promote and discard
+
+An owner's box lists other people's versions that have changes in them, with each request they made, and two links:
+
+- **make it everyone's** merges that person's version into everyone's and builds it. If it conflicts with newer changes, or doesn't build, nothing changes and the box says why. Once it's merged, their own version is removed and they're back on everyone's.
+- **discard** throws that version away. The runner lets the person whose version it is discard it too, though their own box doesn't show that link yet.
+
+## guests
+
+A public app can let people who aren't signed in take part too. They become guests: the box gives them a random name kept in a signed cookie, and from then on they're members like any other, with a version of their own.
+
+```js title="computah.config.mjs"
+import { clientOnly } from "@tetraslam13/computah/server";
+
+export default {
+  // ...
+  guests: { secret: process.env.COMPUTAH_GUEST_SECRET, forgetMs: 24 * 60 * 60 * 1000 },
+  trust: {
+    owners: ["you@example.com"],
+    members: "everyone",
+    memberPaths: ["app/playground/*.tsx"],
+    memberCheck: clientOnly(),
+    memberNote: "you can change the framed parts of each page.",
+    memberDailyLimit: 10,
+    dailyLimit: 200,
+  },
+  maxCopies: 6,
+};
+```
+
+- **`guests.secret`** signs the cookie, so nobody can pretend to be another guest. Guests need `members: "everyone"` to do anything.
+- **`guests.forgetMs`** removes a guest's version once they've been away that long.
+- **`maxCopies`** caps how many personal copies run at once. Starting one more stops the one used longest ago.
+
+Guests are strangers, so keep what they change to code that runs only in their own browser. Put each changeable piece in its own file under `memberPaths`, and load it from a wrapper outside them with `next/dynamic` and `ssr: false`. `clientOnly()` then refuses any change that stops being a client component, declares server code, or imports anything but `react` (pass `clientOnly({ imports: [...] })` to allow more). This site works exactly that way: the framed pieces on its cards are files in `apps/docs/playground`.
+
+## who sees which requests
+
+Everyone who can use the box sees the requests made to everyone's version, plus their own. Owners see every request.

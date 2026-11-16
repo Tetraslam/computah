@@ -1,0 +1,12 @@
+{
+  "root": false,
+  "extends": "//",
+  "overrides": [
+    {
+      // The stylesheet styles many unrelated `a`, `p` and `li` elements by their container, which this rule
+      // reads as one element losing to another. Each rule here was checked against what it's meant to win.
+      "includes": ["app/globals.css"],
+      "linter": { "rules": { "style": { "noDescendingSpecificity": "off" } } }
+    }
+  ]
+}

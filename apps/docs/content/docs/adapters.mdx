@@ -1,0 +1,86 @@
+---
+title: adapters
+description: the agent, who's visiting, the host and the sandbox, each swappable
+---
+
+The parts of computah that touch the outside world are meant to be swapped. Each has a few built in, and each is small enough to write yourself.
+
+| kind | built in | your own |
+| --- | --- | --- |
+| agent | `claude`, `opencode`, `codex` | an object with `command()` and `parse()` |
+| identity | `exe`, `local`, `header(name)`, `gateway(secret)` | a function from a request to a person |
+| app | any install, build, start and dev commands | |
+| host | `vercel` | an object with `deployed()` |
+| sandbox | `exeSandbox`, `modalSandbox` | an object with `open()`, see [sandboxes](/sandboxes) |
+
+Everything here comes from `@tetraslam13/computah/server`.
+
+## agents
+
+The built-in agents run the real command line tools, headless, in the app's repository:
+
+- **`claude`** runs `claude -p` with its streaming JSON output, allowed to edit files.
+- **`opencode`** runs `opencode run` with its JSON output.
+- **`codex`** runs `codex exec` with its JSON output, sandboxed to the workspace.
+
+Each takes `{ model, args }`: a model in the agent's own format, and extra arguments for its command. In the config, `agent: "claude"` and `model: "..."` do the same.
+
+An agent of your own is an object with a name and two functions. `command` says what to run for one request. `parse` turns one line of its output into events:
+
+```js title="computah.config.mjs"
+const mine = {
+  name: "mine",
+  command: (prompt, cwd) => ({ command: "./scripts/agent.sh", args: [cwd], stdin: prompt }),
+  parse: (line) => (line.trim() ? [{ type: "text", text: line }] : []),
+};
+
+export default {
+  agent: mine,
+  // ...
+};
+```
+
+The events are `{ type: "text", text }` for what it says, `{ type: "tool", name, detail }` for what it does, `{ type: "error", message }` when it fails, and `{ type: "result", text }` for its closing words. Without a result, its last text is used. A command that exits with an error fails the request.
+
+## identity
+
+Identity answers one question for every request: who is this? It returns a person, `{ id, name }`, or `null` for someone not signed in. The `id` must be stable, and impossible for a visitor to fake.
+
+- **`"exe"`** reads [exe.dev's login](/on-exe-dev).
+- **`"local"`** says anyone on this machine is you, and nobody else is anyone.
+- **`header(idHeader, nameHeader)`** reads the person from headers set by a proxy you control. The proxy must remove those headers from what visitors send, or anyone can claim to be anyone.
+- **`gateway(secret)`** believes the app's own server, when it sends the shared secret. It goes with the route on the [vercel](/on-vercel) card.
+
+Your own is a function that gets the request (Node's `IncomingMessage`) and returns a person, or a promise of one:
+
+```js
+identity: (request) => {
+  const id = request.headers["x-user-id"];
+  const email = request.headers["x-user-email"];
+  return typeof id === "string" ? { id, name: typeof email === "string" ? email : undefined } : null;
+},
+```
+
+## hosts
+
+A host builds and serves what the runner pushes. Today there's `vercel`:
+
+```js
+vercel({ projectId: "prj_...", teamId: "team_..." }); // teamId only for a team's project
+```
+
+It reads its token from `VERCEL_TOKEN` (or `token`). It waits up to 90 seconds for Vercel to notice a push (`startTimeoutMs`), up to ten minutes for the build (`timeoutMs`), and asks every three seconds (`pollMs`).
+
+Your own host is an object with a name and one function:
+
+```js
+const myHost = {
+  name: "my-host",
+  async deployed({ sha, branch, production }) {
+    // Wait until the host has built `sha` on `branch`. Throw an error with the build log if it failed.
+    return { url: "https://..." }; // where it's served, if the host says
+  },
+};
+```
+
+If it throws, the error's message goes to the agent as the reason the build failed.

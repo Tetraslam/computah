@@ -1,0 +1,59 @@
+---
+title: serve it
+description: let the runner serve the app, so it changes for the people using it
+---
+
+On your laptop the box changes the checkout in front of you. To put the box in an app that people use every day, from any device, the runner serves the app itself. Run this in the repository, on a machine that stays on:
+
+```sh
+computah serve
+```
+
+It reads `computah.config.mjs` from the same folder:
+
+```js title="computah.config.mjs"
+export default {
+  agent: "codex",
+  app: {
+    install: "pnpm install --frozen-lockfile",
+    build: "pnpm build",
+    start: "pnpm start", // must listen on $PORT
+    dev: "pnpm dev", // optional: lets the person asking watch their change live
+  },
+  identity: "exe", // exe.dev's login, "local", or (request) => ({ id, name })
+  trust: {
+    owners: ["you@example.com"],
+    trusted: ["friend@example.com"],
+    members: "everyone",
+    memberPaths: ["app/**"],
+  },
+};
+```
+
+## what each part means
+
+- **`agent`** is who makes the changes: `"claude"`, `"opencode"`, `"codex"`, or [one of your own](/adapters). Leave it out and the runner uses the first one installed.
+- **`app`** is how to run your app. `install` runs once in each fresh copy, `build` builds a copy, and `start` serves a built copy. The runner picks a free port for every copy and passes it as `$PORT`, so `start` must listen there. If the app sits in a folder of the repository (a monorepo), say which with `dir: "apps/web"`.
+- **`app.dev`** is optional. With it, the person who asked for a change is moved onto a hot-reloading copy and watches the change happen. Without it, they see the change once it's built.
+- **`identity`** is how the runner tells who is visiting. `"exe"` reads [exe.dev's login](/on-exe-dev). `"local"` treats this machine as you and everyone else as a visitor. Or write a function, see [adapters](/adapters).
+- **`trust`** is who may do what. The [people and trust](/people-and-trust) card has all of it.
+
+The runner listens on port 8000 on every interface. Change it with `port` and `host` in the config, or `--port` on the command line. Point a browser at it and you get your app, with the box in it for the people you trust.
+
+## what happens when it starts
+
+1. It makes a branch called `computah/main` from your current commit. That branch is everyone's version of the app from now on.
+2. It checks that branch out into `.computah/work/main`, a separate copy, so the checkout you work in is never touched.
+3. It installs, builds, and starts everyone's version, then starts answering on its port.
+
+Everything at `/__computah` is the runner's own: the box talks to it there. Every other address is passed to the app.
+
+Changes land on `computah/main`, not on the branch you had checked out. To bring them into your own branch, merge `computah/main` like any other branch.
+
+## the command
+
+```sh
+computah serve [--config computah.config.mjs] [--port 8000] [--cwd .]
+```
+
+`--config` is the config file, `--port` overrides the config's port, and `--cwd` is the repository to serve. The [reference](/reference) card lists every field the config takes.

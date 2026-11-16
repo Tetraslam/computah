@@ -1,0 +1,75 @@
+---
+title: start here
+description: the box in your app on your laptop, changing your code as you watch
+---
+
+You need three things: a React app, a git repository it lives in, and one of [Claude Code](https://claude.com/claude-code), [OpenCode](https://opencode.ai) or [Codex](https://github.com/openai/codex) installed and signed in. computah doesn't bring its own agent. It drives the one you already use.
+
+## install it
+
+```sh
+pnpm add @tetraslam13/computah
+```
+
+## put the box in your app
+
+It can go anywhere. In a Next app the root layout is a good spot, so it's on every page:
+
+```tsx title="app/layout.tsx"
+import { Computah } from "@tetraslam13/computah";
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Computah />
+      </body>
+    </html>
+  );
+}
+```
+
+The box draws itself in a shadow root, so your styles and its styles never touch. It has no dependencies beyond React.
+
+## run the runner next to your dev server
+
+The box is only a window. The runner is the part that hands your words to the agent. Start your dev server through it:
+
+```json title="package.json"
+{ "scripts": { "dev": "computah -- next dev" } }
+```
+
+Everything after `--` runs alongside the runner, and stopping one stops the other. The runner listens on `127.0.0.1:4821` and only answers this machine. It uses the first agent it finds installed, in the order `claude`, `opencode`, `codex`. To pick one, say so: `computah --agent codex -- next dev`.
+
+## open it
+
+Open your app and press `Ctrl+.` (`⌘.` on a Mac), or click the small window button in the bottom right corner. Type what should be different and press return. Shift and return makes a new line.
+
+## what you'll see
+
+- Your request, and under it one line saying what the agent is doing right now, like "reading page.tsx" or "editing counter.tsx", with a clock.
+- A steps link that shows every step it has taken so far, and a stop link.
+- Hot reload showing the change on the page as the files are saved.
+- When it's done, the agent's own one or two sentences about what changed, and an undo link.
+
+A few more things it does without being asked:
+
+- **It knows where you were.** The page, the text you had selected, the window size, and an element you pointed at (with the "point at it" button) all go to the agent. Here's what it would send from this card:
+
+<Playground name="start-here" />
+
+- **It queues.** Send several requests and they run one at a time, in order.
+- **It commits.** Each finished change is its own commit, named `computah: ` and the start of your request. If a change touches a file you already had uncommitted edits in, it's left uncommitted instead, so your work and the agent's don't get mixed. Pass `--no-commit` to never commit.
+- **It leaves no mess.** A request that fails or that you stop keeps none of its edits.
+- **Undo is careful.** It never overwrites edits made since. If later work touches the same lines, it says so and changes nothing.
+
+The runner keeps its records in a `.computah` folder in your repository, and hides that folder from `git status` without touching your `.gitignore`.
+
+## if the box says the runner isn't running
+
+That means nothing is answering on `127.0.0.1:4821`. Start your dev server through `computah` as above. The box keeps checking and notices when it's up.

@@ -1,0 +1,123 @@
+---
+title: reference
+description: every prop, flag and config field, as the source has them
+---
+
+## the box: `<Computah>`
+
+```tsx
+import { Computah } from "@tetraslam13/computah";
+```
+
+| prop | default | |
+| --- | --- | --- |
+| `hotkey` | `"mod+."` | the keys that open and close the box. `mod` is ⌘ on a Mac and Ctrl elsewhere. `ctrl`, `meta`, `shift` and `alt` work too, joined with `+` |
+| `title` | `"improvements"` | the window's title |
+| `launcher` | `true` | show the small button that opens it |
+| `defaultOpen` | `false` | start open |
+| `endpoint` | found for you | where the runner is. Without it, the box asks the page's own address at `/__computah` first (a runner serving the app), then tries `http://127.0.0.1:4821` |
+| `secret` | none | sent as a bearer token, for a runner started with `--secret` |
+
+Try a `hotkey`:
+
+<Playground name="reference" />
+
+The box remembers whether it was open, what you'd typed, and where you dragged it, for as long as the tab is open.
+
+## the runner: `computah`
+
+```sh
+computah [options] [-- <command to run alongside, e.g. next dev>]
+computah serve [--config computah.config.mjs] [--port 8000] [--cwd .]
+```
+
+| flag | default | |
+| --- | --- | --- |
+| `--agent` | the first one installed | `claude`, `opencode` or `codex` |
+| `--model` | the agent's own | a model to pass to the agent |
+| `--port` | `4821` | where the runner listens |
+| `--host` | `127.0.0.1` | anything else needs `--secret` |
+| `--secret` | `COMPUTAH_SECRET` | require this as a bearer token |
+| `--origin` | none | allow a page from another address. Give it once per address |
+| `--no-commit` | | leave changes uncommitted |
+| `--cwd` | here | the repository to work in |
+| `--help` | | print all of this |
+
+For `computah serve`: `--config` is the config file, `--port` overrides the config's port, and `--cwd` is the repository.
+
+## the config: `computah.config.mjs`
+
+Its default export is read by `computah serve`.
+
+| field | default | |
+| --- | --- | --- |
+| `agent` | the first one installed | `"claude"`, `"opencode"`, `"codex"`, or an [agent object](/adapters) |
+| `model` | | passed to a built-in agent |
+| `app` | | how to install, build and run the app, below |
+| `identity` | required | `"exe"`, `"local"`, or a function from a request to a person. See [adapters](/adapters) |
+| `trust` | required, with at least one owner | who may do what, below |
+| `port` | `8000` | where the runner listens |
+| `host` | `"0.0.0.0"` | which interface it listens on |
+| `idleMs` | 20 minutes | stop a personal copy nobody has used for this long |
+| `agentEnv` | | extra environment variables for the agent |
+| `release` | build and serve here | `{ push: { ... } }` to push changes to a host instead, below |
+| `repairs` | `3` | how many times the agent may try to fix a change that doesn't build |
+| `sandbox` | none | `{ in: exeSandbox() }` to run the agent in a [sandbox](/sandboxes). Members only, unless `for: "everyone"` |
+| `guests` | none | `{ secret, forgetMs }` to let people who aren't signed in take part as [guests](/people-and-trust#guests). Needs `trust.members: "everyone"` |
+| `maxCopies` | no limit | the most personal copies running at once. Starting one more stops the one used longest ago |
+
+### `app`
+
+Each command runs in a shell, in the app's folder, with `PORT` set.
+
+| field | default | |
+| --- | --- | --- |
+| `dir` | the repository's root | the app's folder inside the repository |
+| `install` | | install dependencies in a fresh copy, for example `pnpm install --frozen-lockfile` |
+| `build` | | build a copy for serving, for example `pnpm build` |
+| `start` | required, unless pushing | serve the built copy on `$PORT`, for example `pnpm start` |
+| `dev` | | serve a copy with hot reload on `$PORT`, so the person who asked watches their change live |
+| `health` | `"/"` | the path that answers when the app is up |
+| `startTimeoutMs` | 90 seconds | how long a copy may take to start answering |
+| `env` | | extra environment variables for every command |
+
+### `trust`
+
+| field | default | |
+| --- | --- | --- |
+| `owners` | required | ids or names (such as emails) of the owners |
+| `trusted` | nobody | the same, for trusted people |
+| `members` | nobody | a list, or `"everyone"` who is signed in |
+| `memberPaths` | anything | files a member's change may touch, as globs from the repository's root |
+| `memberNote` | none | what members may change, in plain words. The agent is told it, and members see it in the box |
+| `memberCheck` | none | `(files) => reason or null`, given each changed file's path and new contents. `clientOnly()` is one |
+| `memberDailyLimit` | `20` | requests a member may send per day |
+| `dailyLimit` | no limit | requests all members together may send per day |
+
+### `release.push`
+
+| field | default | |
+| --- | --- | --- |
+| `remote` | `"origin"` | the git remote to push to |
+| `branch` | `"main"` | the branch the host serves to everyone |
+| `host` | none | who builds what's pushed. Without one, a change counts as live once the push lands |
+| `check` | `true` when `app.build` is set | build on the runner before pushing, to catch a broken build early |
+
+## the route: `createProxy`
+
+```ts
+import { createProxy } from "@tetraslam13/computah/next";
+```
+
+| option | default | |
+| --- | --- | --- |
+| `runner` | required | the runner's address, for example `https://runner.example.com` |
+| `secret` | required | the same secret the runner's `gateway(secret)` was given |
+| `identify` | required | `(request) => ({ id, name }) or null`, from the app's own sign-in |
+| `basePath` | `"/api/computah"` | where the route is mounted |
+
+It returns `{ GET, POST }`.
+
+## what the server entry exports
+
+From `@tetraslam13/computah/server`: the agents `claude`, `opencode`, `codex` and `agents`; the identities `exe`, `local`, `header` and `gateway`; the member check `clientOnly`; the host `vercel`; the sandboxes `exeSandbox` and `modalSandbox`; and, for building your own runner, `Computah`, `Site`, `serve`, `createRunnerServer`, `createFrontServer` and `buildPrompt`, with their types.
