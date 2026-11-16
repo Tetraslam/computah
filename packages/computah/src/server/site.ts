@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -20,6 +21,8 @@ export interface SiteOptions {
   timeoutMs?: number;
   /** Extra environment for the agent. */
   agentEnv?: NodeJS.ProcessEnv;
+  /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
+  lingerMs?: number;
 }
 
 interface Release {
@@ -77,6 +80,8 @@ export class Site {
   private builds: Promise<unknown> = Promise.resolve();
   private reaper: NodeJS.Timeout | null = null;
   private counts = new Map<string, { day: string; sent: number }>();
+  /** Every running copy by a random name, so a page keeps talking to the copy that served it. */
+  private copies = new Map<string, AppProcess>();
 
   constructor(private options: SiteOptions) {
     this.agentName = options.agent.name;
@@ -129,13 +134,30 @@ export class Site {
     return version.lane.busy || !!version.building;
   }
 
-  /** The port of the copy that should answer this person, starting one if needed. */
-  async target(person: Person | null, wantsMain = false): Promise<{ port: number; live: boolean }> {
+  private name(process: AppProcess): string {
+    for (const [name, known] of this.copies) if (known === process) return name;
+    const name = randomBytes(6).toString("hex");
+    this.copies.set(name, process);
+    return name;
+  }
+
+  /** The port of a copy by name, if it's still running. */
+  copy(name: string | undefined): number | null {
+    const process = name ? this.copies.get(name) : undefined;
+    if (!process || process.exited) {
+      if (name) this.copies.delete(name);
+      return null;
+    }
+    return process.port;
+  }
+
+  /** The copy that should answer this person, starting one if needed. */
+  async target(person: Person | null, wantsMain = false): Promise<{ port: number; live: boolean; copy: string }> {
     const version = this.versionFor(person, wantsMain);
     version.usedAt = Date.now();
     if (this.isLive(version, person) && version.live) {
       version.live.usedAt = Date.now();
-      return { port: version.live.process.port, live: true };
+      return { port: version.live.process.port, live: true, copy: this.name(version.live.process) };
     }
     if (!version.release || version.release.process.exited) {
       try {
@@ -148,7 +170,7 @@ export class Site {
     }
     const release = version.release;
     if (!release) throw new RequestError("The app isn't running.", 503);
-    return { port: release.process.port, live: false };
+    return { port: release.process.port, live: false, copy: this.name(release.process) };
   }
 
   async me(person: Person | null, wantsMain = false): Promise<Me> {
@@ -421,9 +443,11 @@ export class Site {
     const old = version.release;
     version.release = { sha, dir, process };
     if (old) {
-      old.process.stop();
-      if (old.dir !== dir)
-        setTimeout(() => void this.git(this.root, ["worktree", "remove", "--force", old.dir]).catch(() => ""), 5000).unref();
+      // Pages already open were served by the old copy and still fetch from it, so it lingers before stopping.
+      setTimeout(() => {
+        old.process.stop();
+        if (old.dir !== dir) void this.git(this.root, ["worktree", "remove", "--force", old.dir]).catch(() => "");
+      }, this.options.lingerMs ?? 120_000).unref();
     }
   }
 
@@ -453,6 +477,7 @@ export class Site {
       version?.live?.process.stop();
       version?.release?.process.stop();
     }
+    for (const process of this.copies.values()) process.stop();
   }
 }
 

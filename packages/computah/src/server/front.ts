@@ -9,6 +9,34 @@ import type { JobEvent } from "./types.js";
 /** Everything the runner serves itself lives under this path; the rest goes to the app. */
 export const PREFIX = "/__computah";
 const VIEW_COOKIE = "computah_view";
+const COPY_COOKIE = "computah_copy";
+
+const cookie = (request: IncomingMessage, name: string) => new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(request.headers.cookie ?? "")?.[1];
+
+/** A request for a page itself, as opposed to something a page already open is fetching. */
+export function isNavigation(request: IncomingMessage): boolean {
+  if (request.method !== "GET") return false;
+  const mode = request.headers["sec-fetch-mode"];
+  if (typeof mode === "string") return mode === "navigate";
+  return (request.headers.accept ?? "").includes("text/html");
+}
+
+/**
+ * Pick the copy of the app for a request. A page load gets the person's current copy and is
+ * told its name in a cookie; everything that page then fetches goes to that same copy, so a
+ * page never mixes files from two builds while a change is being swapped in.
+ */
+async function route(site: Site, person: Person | null, request: IncomingMessage): Promise<{ port: number; setCookie?: string }> {
+  if (!isNavigation(request)) {
+    const pinned = site.copy(cookie(request, COPY_COOKIE));
+    if (pinned) return { port: pinned };
+  }
+  const target = await site.target(person, wantsMain(request));
+  return {
+    port: target.port,
+    setCookie: isNavigation(request) ? `${COPY_COOKIE}=${target.copy}; Path=/; SameSite=Lax; HttpOnly` : undefined,
+  };
+}
 
 function send(response: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers });
@@ -63,8 +91,8 @@ export function createFrontServer(site: Site): Server {
       person = await site.identify(request);
       const path = new URL(request.url ?? "/", "http://front").pathname;
       if (path === PREFIX || path.startsWith(`${PREFIX}/`)) return await api(site, person, path.slice(PREFIX.length), request, response);
-      const { port } = await site.target(person, wantsMain(request));
-      proxyRequest(request, response, port);
+      const { port, setCookie } = await route(site, person, request);
+      proxyRequest(request, response, port, setCookie);
     } catch (error) {
       if (response.headersSent) return void response.end();
       if (error instanceof RequestError) return send(response, error.status, { error: error.message });
@@ -74,7 +102,7 @@ export function createFrontServer(site: Site): Server {
   server.on("upgrade", async (request, socket, head) => {
     try {
       const person = await site.identify(request);
-      const { port } = await site.target(person, wantsMain(request));
+      const { port } = await route(site, person, request);
       proxyUpgrade(request, socket, head, port);
     } catch {
       socket.destroy();

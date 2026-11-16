@@ -23,13 +23,17 @@ function forwardHeaders(incoming: IncomingMessage): Record<string, string | stri
 }
 
 /** Pass an HTTP request to a copy of the app on this machine and stream the answer back. */
-export function proxyRequest(incoming: IncomingMessage, outgoing: ServerResponse, port: number) {
+export function proxyRequest(incoming: IncomingMessage, outgoing: ServerResponse, port: number, setCookie?: string) {
   const upstream = request(
     { host: "127.0.0.1", port, method: incoming.method, path: incoming.url, headers: forwardHeaders(incoming) },
     (response) => {
       const headers: Record<string, string | string[]> = {};
       for (const [name, value] of Object.entries(response.headers)) {
         if (value !== undefined && !HOP.has(name)) headers[name] = value;
+      }
+      if (setCookie) {
+        const existing = headers["set-cookie"];
+        headers["set-cookie"] = [...(Array.isArray(existing) ? existing : existing ? [existing] : []), setCookie];
       }
       outgoing.writeHead(response.statusCode ?? 502, headers);
       response.pipe(outgoing);

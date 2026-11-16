@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import type { Server } from "node:http";
+import { get, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -224,6 +224,37 @@ describe("a served app", () => {
     }
     expect(sawLive).toBe(true);
     expect(await page("olive")).toBe("hello\nlive line\n");
+  });
+});
+
+describe("a page and the copy that served it", () => {
+  /** A page load as a browser sends it. `fetch` can't set sec-fetch-mode, so this uses a plain request. */
+  const load = (id: string, cookie?: string) =>
+    new Promise<{ text: string; pin?: string }>((resolve, reject) => {
+      const headers = { ...as(id), "sec-fetch-mode": "navigate", ...(cookie ? { cookie } : {}) };
+      get(`${base}/`, { headers }, (response) => {
+        let text = "";
+        response.on("data", (chunk) => {
+          text += chunk;
+        });
+        response.on("end", () => resolve({ text, pin: /computah_copy=([a-f0-9]+)/.exec(String(response.headers["set-cookie"]))?.[1] }));
+      }).on("error", reject);
+    });
+
+  it("keeps a page's own requests on its copy while a new build swaps in", async () => {
+    const first = await load("tess");
+    expect(first.pin).toBeTruthy();
+    await ask("olive", "newer");
+    // A page opened before the change still fetches from the copy that served it...
+    expect(await page("tess", `computah_copy=${first.pin}`)).toBe("hello\n");
+    // ...and loading the page again moves it to the new one.
+    const second = await load("tess", `computah_copy=${first.pin}`);
+    expect(second.text).toBe("hello\nnewer\n");
+    expect(second.pin).not.toBe(first.pin);
+  });
+
+  it("ignores a made-up copy name", async () => {
+    expect(await page(undefined, "computah_copy=nope")).toBe("hello\n");
   });
 });
 
