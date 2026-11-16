@@ -1,26 +1,57 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Black and white only. The one gray is a 1-bit checker dither. See BRIEF.md. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: #000;
+  --color-paper: #fff;
+  --font-words: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100%;
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-words);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
+}
+
+::selection {
+  background: #000;
+  color: #fff;
+}
+
+.card {
+  border: 1px solid #000;
+  outline: 1px solid #fff;
+  box-shadow:
+    0 0 0 2px #000,
+    3px 3px 0 2px #000;
+}
+
+.rule {
+  border: 0;
+  border-top: 1px solid #000;
+}
+
+.push {
+  border: 1px solid #000;
+  border-radius: 7px;
+  background: #fff;
+  font: 700 13px/1 var(--font-ui);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.push:hover,
+.push:active {
+  background: #000;
+  color: #fff;
+}
+.push:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
 }
