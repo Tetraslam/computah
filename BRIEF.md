@@ -54,3 +54,23 @@ the closest of my projects is parc, because both have a surface that takes text 
 - parc is warm paper with stepped off-whites and an ember accent; this is pure black and white with no gray and no accent.
 - parc's field is a smooth webgpu dither shader that eases between energy levels; this uses fixed 1-bit css patterns that step.
 - parc's composer opens in place inside the page and morphs its height on a curve; this is a separate window that floats over the app, drags, and opens with outline rectangles.
+
+## the docs site
+
+`apps/docs` is a stack of cards, the way hypercard documents were: each page is one card on the dithered desktop, and you move through them in order. it's built on the same materials as the box and the demo (the checker desktop, the double-ruled card frame with its hard edge, pinstriped title bars, the default button's ring, inversion for hover and selection, stepped motion). no second look.
+
+sources looked at for it (the earlier study, plus the date book stack, the hypercard 2.3 box art and a system 7.6 desktop, notes in /tmp/study/notes.md): navigation in hypercard sits on the card's own edge as small outlined arrows and a house for the home card; the menu bar is white with bold labels and a 1px rule; a pulled-down menu is a white panel with a hard edge whose items invert.
+
+hierarchy:
+
+- the home card: the name, big and centered in the serif, with one line under it. then what it is in a sentence, the recording, the two lines it takes, a note that this site is one too (with the visitor's own piece in its window), and the stack as a list of every card. the next arrow is the default button.
+- a doc card: the title in the serif, a one-line lede in italic, a rule, then the words. headings are the bold system face, small, because the card's title already says where you are. code sits black on white in a 1px frame, its name on a strip above with a copy button. what isn't done yet sits in a note under a dithered strip. the bottom edge carries the previous card, a house and "card n of m", and the next card.
+- around the cards: a menu bar (the stack's name, a cards menu, find, and the markdown twin of the card) and nothing else.
+
+what's different from the demo:
+
+- many cards instead of one, so there is navigation: arrows on each card, the arrow keys, a cards menu with a check on the current card, and find (`/`), which opens as a floating window like the box.
+- a new card arrives the way you asked for it: stepping wipes it in from the side you're heading (hypercard's "visual effect wipe"), and jumping from a list draws the box's zoom rectangles from what you clicked. both 160ms in four steps; under reduced motion it's just there.
+- the parts a visitor may change sit in a window inside the card, titled "yours to change" on a pinstriped bar. it's the only thing on a card that looks like the box, because it's the only thing the box may change for a visitor. a piece that breaks shows a dithered "this piece broke" state instead of taking the card down.
+- the changes card lists real commits made through the box, with the same marks as the box: solid for a change that stands, hollow and struck through for one undone. empty, it says so on a dithered field.
+- the recording is shown at its own pixel size so its dither stays 1-bit.
