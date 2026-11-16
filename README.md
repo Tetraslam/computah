@@ -1,4 +1,4 @@
-# computah
+# computah, make this app better
 
 An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode or Codex) makes the change in your repo while you watch.
 
