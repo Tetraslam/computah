@@ -3,7 +3,15 @@ import type { JobContext } from "./types.js";
 const clip = (text: string, limit: number) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
 
 /** The instructions an agent gets for one request from the box. */
-export function buildPrompt(text: string, context: JobContext): string {
+/** What a request is allowed to change, told to the agent so it doesn't waste the request on something that will be refused. */
+export interface Limits {
+  /** Globs of the only files that may change. */
+  paths?: string[];
+  /** Any further rules, in plain words. */
+  note?: string;
+}
+
+export function buildPrompt(text: string, context: JobContext, limits: Limits = {}): string {
   const where: string[] = [];
   if (context.url) where.push(`- Page they were on: ${clip(context.url, 500)}`);
   if (context.title) where.push(`- Page title: ${clip(context.title, 200)}`);
@@ -25,6 +33,15 @@ export function buildPrompt(text: string, context: JobContext): string {
     text.trim(),
     "</request>",
     ...(where.length ? ["", "Where they were when they asked:", ...where] : []),
+    ...(limits.paths?.length
+      ? [
+          "",
+          "This person may only change part of the app. You may only create or edit files matching:",
+          ...limits.paths.map((path) => `- ${path}`),
+          ...(limits.note ? [limits.note] : []),
+          "A change to any other file is thrown away along with the whole request. If what they ask can't be done within those files, change nothing and say so.",
+        ]
+      : []),
     "",
     "How to work:",
     "- Find the code behind what they were looking at before changing anything. Follow the repo's conventions and any AGENTS.md or CLAUDE.md.",

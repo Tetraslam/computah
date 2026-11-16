@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
 /** Who is asking. `id` must be stable and unforgeable by the visitor. */
@@ -76,8 +76,17 @@ export interface Trust {
   members?: string[] | "everyone";
   /** Files a member's change may touch, as globs relative to the repo root. Default: anything. */
   memberPaths?: string[];
+  /** Rules for members beyond `memberPaths`, in plain words. The agent is told them. */
+  memberNote?: string;
+  /**
+   * Look at a member's change and object to it: given each changed file's new contents, return why
+   * it isn't acceptable, or null. See `clientOnly()` for a ready-made one.
+   */
+  memberCheck?: (files: { path: string; content: string | null }[]) => string | null;
   /** Requests a member may send per day. Default 20. */
   memberDailyLimit?: number;
+  /** Requests all members together may send per day. Default: no limit. */
+  dailyLimit?: number;
 }
 
 export function levelOf(person: Person | null, trust: Trust): Level {
@@ -125,4 +134,50 @@ export function slugFor(person: Person): string {
   let hash = 2166136261;
   for (const char of person.id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return `${readable || "person"}-${(hash >>> 0).toString(36)}`;
+}
+
+/**
+ * A `memberCheck` for pieces of a page that run only in the visitor's own browser: every changed
+ * file must be a client component ("use client" first), must not declare server code, and may
+ * import only the listed packages. Pair it with a wrapper that loads the pieces without server
+ * rendering, so a member's code never runs on your server.
+ */
+export function clientOnly(options: { imports?: string[] } = {}): NonNullable<Trust["memberCheck"]> {
+  const allowed = options.imports ?? ["react"];
+  return (files) => {
+    for (const { path, content } of files) {
+      if (content === null) return `${path} can't be deleted.`;
+      const code = content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      if (!/^\s*["']use client["'];?/.test(code)) return `${path} has to start with "use client".`;
+      if (/["']use server["']/.test(code)) return `${path} can't contain server code.`;
+      const sources = [
+        ...code.matchAll(/\bfrom\s*["']([^"']+)["']/g),
+        ...code.matchAll(/\bimport\s*["']([^"']+)["']/g),
+        ...code.matchAll(/\b(?:import|require)\s*\(\s*["']([^"']+)["']/g),
+      ].map((match) => match[1] as string);
+      const stray = sources.find((source) => !allowed.includes(source));
+      if (stray) return `${path} can only import ${allowed.join(", ")}, not "${stray}".`;
+      if (/\b(?:import|require)\s*\(\s*[^"'\s)]/.test(code)) return `${path} can't load code by a computed name.`;
+    }
+    return null;
+  };
+}
+
+/** Sign-in for people who haven't signed in: a random name kept in a signed cookie. */
+export const GUEST_COOKIE = "computah_guest";
+
+export function guestToken(secret: string, id: string): string {
+  return `${id}.${createHmac("sha256", secret).update(id).digest("hex").slice(0, 32)}`;
+}
+
+/** The guest a request's cookie names, if its signature is ours. */
+export function guestFrom(request: IncomingMessage, secret: string): Person | null {
+  const value = new RegExp(`(?:^|;\\s*)${GUEST_COOKIE}=([a-z0-9]+\\.[a-f0-9]+)`).exec(request.headers.cookie ?? "")?.[1];
+  if (!value) return null;
+  const [id] = value.split(".");
+  if (!id) return null;
+  const wanted = Buffer.from(guestToken(secret, id));
+  const given = Buffer.from(value);
+  if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) return null;
+  return { id: `guest:${id}`, name: "guest" };
 }

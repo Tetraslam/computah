@@ -33,6 +33,8 @@ export interface Info {
   stale?: boolean;
   proposals?: { id: string; name: string; changes: string[] }[];
   mode?: "swap" | "push";
+  canJoin?: boolean;
+  note?: string;
   ownUrl?: string;
 }
 
@@ -80,6 +82,7 @@ export function createClient(options: ClientOptions = {}) {
 
   return {
     info: () => call<Info>("/"),
+    hello: () => call<{ ok: boolean; guest: boolean }>("/hello", {}),
     view: (version: "main" | "mine") => call<{ ok: boolean }>("/view", { version }),
     promote: (id: string) => call<{ ok: boolean }>(`/versions/${id}/promote`, {}),
     discard: (id: string) => call<{ ok: boolean }>(`/versions/${id}/discard`, {}),

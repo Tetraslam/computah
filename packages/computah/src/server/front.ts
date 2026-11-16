@@ -128,6 +128,11 @@ async function api(site: Site, person: Person | null, path: string, request: Inc
   if (method === "GET" && (first === undefined || first === "me")) {
     return send(response, 200, { name: "computah", ...(await site.me(person, wantsMain(request))) });
   }
+  if (first === "hello" && method === "POST") {
+    // Someone not signed in asks to take part: they become a guest, if this app has guests.
+    const cookie = person ? null : site.welcome();
+    return send(response, cookie ? 201 : 200, { ok: true, guest: !!cookie }, cookie ? { "set-cookie": cookie } : {});
+  }
   if (first === "view" && method === "POST") {
     const body = await readJson(request);
     const main = body.version === "main";

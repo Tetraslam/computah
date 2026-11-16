@@ -83,7 +83,12 @@ export function useBox(options: ClientOptions & { active: boolean }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [info, list] = await Promise.all([client.info(), client.list()]);
+      let [info, list] = await Promise.all([client.info(), client.list()]);
+      if (info.canJoin && info.level === "visitor") {
+        // Not signed in, but this app takes guests: become one, then ask again.
+        await client.hello();
+        [info, list] = await Promise.all([client.info(), client.list()]);
+      }
       setAgent(info.agent);
       setInfo(info);
       setConnection("ready");

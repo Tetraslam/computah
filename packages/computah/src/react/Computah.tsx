@@ -512,6 +512,7 @@ export function Computah({
                   </button>
                 </div>
               </form>
+              {box.info?.note && <p className="footer">{box.info.note}</p>}
               {pushed && box.info?.ownUrl && (
                 <p className="footer">
                   you have a version of your own.

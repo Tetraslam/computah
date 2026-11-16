@@ -36,6 +36,13 @@ export interface ComputahOptions {
   env?: NodeJS.ProcessEnv;
   /** Globs a job's changes must stay inside, or undefined for anywhere. A job that strays is rolled back. */
   allowedPaths?: (job: Job) => string[] | undefined;
+  /** Rules beyond `allowedPaths`, in plain words, told to the agent. */
+  limitsNote?: (job: Job) => string | undefined;
+  /**
+   * Look at what a job changed and object to it. Given each changed file's new contents (null if
+   * it was deleted), return why the change isn't acceptable, or null. An objection rolls the job back.
+   */
+  check?: (job: Job, files: ChangedFile[]) => string | null | Promise<string | null>;
   /** Where to run the agent for a job, other than on this machine. Return nothing to run it here. */
   sandbox?: (job: Job) => Sandbox | undefined;
   /** Called when a job starts working. */
@@ -49,6 +56,11 @@ export interface ComputahOptions {
   onReverted?: (job: Job) => Promise<void>;
   /** How many times the agent may try to fix a failed check. Default 3. */
   repairs?: number;
+}
+
+export interface ChangedFile {
+  path: string;
+  content: string | null;
 }
 
 export class RequestError extends Error {
@@ -196,6 +208,13 @@ export class Computah {
     return job;
   }
 
+  private async objection(job: Job, files: string[]): Promise<string | null> {
+    const changed = await Promise.all(
+      files.map(async (path) => ({ path, content: await readFile(join(this.root, path), "utf8").catch(() => null) })),
+    );
+    return (await this.options.check?.(job, changed)) ?? null;
+  }
+
   /** Record where a finished job's change is on its way to being served. */
   async noteRelease(id: string, state: NonNullable<Job["release"]>, message?: string) {
     const job = this.jobs.get(id);
@@ -287,7 +306,10 @@ export class Computah {
     await this.emit(job.id, { type: "state", state: "working" });
     await this.options.onStart?.(job);
 
-    const { command, args, stdin } = this.options.agent.command(buildPrompt(job.text, job.context), this.root);
+    const { command, args, stdin } = this.options.agent.command(
+      buildPrompt(job.text, job.context, { paths: this.options.allowedPaths?.(job), note: this.options.limitsNote?.(job) }),
+      this.root,
+    );
     const outcome = await this.runAgent(job, current, command, args, stdin);
 
     job.after = await snapshot(this.root);
@@ -311,6 +333,15 @@ export class Computah {
     if (stray.length) {
       await restore(this.root, job.before, job.after).catch(() => {});
       job.error = `That would change parts of the app you can't change here (${stray.slice(0, 3).join(", ")}).`;
+      await this.emit(job.id, { type: "error", message: job.error });
+      await this.finish(job, "failed");
+      return;
+    }
+
+    const objection = files.length && this.options.check ? await this.objection(job, files) : null;
+    if (objection) {
+      await restore(this.root, job.before, job.after).catch(() => {});
+      job.error = objection;
       await this.emit(job.id, { type: "error", message: job.error });
       await this.finish(job, "failed");
       return;

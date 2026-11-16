@@ -163,6 +163,37 @@ and the box points at it: `<Computah endpoint="/api/computah" />`.
 
 Another host is one function: `deployed({ sha, branch, production })` waits for the build and returns its address, or throws with the build log.
 
+## Letting anyone change part of your app
+
+For a public app, you can let people who aren't signed in change a few chosen pieces, each in a version only they see:
+
+```js
+import { clientOnly, exeSandbox } from "@tetraslam13/computah/server";
+
+export default {
+  // ...
+  guests: { secret: process.env.COMPUTAH_GUEST_SECRET, forgetMs: 24 * 60 * 60 * 1000 },
+  trust: {
+    owners: ["you@example.com"],
+    members: "everyone",
+    memberPaths: ["app/playground/*.tsx"],
+    memberCheck: clientOnly(), // each piece must stay a browser-only component that imports only react
+    memberNote: "you can change the framed parts of each page.",
+    memberDailyLimit: 10,
+    dailyLimit: 200,
+  },
+  sandbox: { in: exeSandbox() },
+  maxCopies: 6,
+};
+```
+
+What keeps this safe:
+
+- **A guest's code never runs on your server.** Load each changeable piece with `next/dynamic` and `ssr: false`, from a wrapper outside `memberPaths`. `clientOnly()` rejects a change that stops being a client component, declares server code, or imports anything but `react`.
+- **A guest's code runs only in their own browser.** Their changes live in their own version until an owner promotes one.
+- **A guest's agent sees only a copy of the code.** With a sandbox it runs on a throwaway machine, without your ignored files.
+- **Costs are capped.** Per-person and whole-app daily limits, a cap on running copies, and forgotten guests are cleaned up.
+
 ## Sandboxes
 
 By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead: the code is copied in (without ignored files, so no `.env`), the agent works there, and only a patch of what it changed comes back.

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
 import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
-import { type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
+import { GUEST_COOKIE, guestFrom, guestToken, type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
 import type { Sandbox } from "./sandbox.js";
 import type { Agent, Job, JobContext } from "./types.js";
@@ -25,6 +25,14 @@ export interface SiteOptions {
   agentEnv?: NodeJS.ProcessEnv;
   /** How many times the agent may try to fix a change that doesn't build. Default 3. */
   repairs?: number;
+  /**
+   * Let people who aren't signed in take part, as guests remembered by a signed cookie. A guest
+   * is a member like any other, so `trust.members` must be "everyone" for them to do anything.
+   * `forgetMs` removes a guest's version once they've been away that long.
+   */
+  guests?: { secret: string; forgetMs?: number };
+  /** The most personal copies running at once. Starting one more stops the least recently used. Default: no limit. */
+  maxCopies?: number;
   /**
    * Run the agent away from this machine, on a copy of the code. `for: "members"` (the default)
    * sandboxes only people who aren't owners or trusted; `"everyone"` sandboxes every request.
@@ -85,6 +93,10 @@ export interface Me {
   /** Whether they're on the hot-reloading copy right now. */
   live: boolean;
   stale: boolean;
+  /** True for someone not signed in who could take part as a guest by asking. */
+  canJoin: boolean;
+  /** For a member: what they're allowed to change, in the owner's words. */
+  note?: string;
   /** "swap" when the runner serves the app itself, "push" when a host does. */
   mode: "swap" | "push";
   /** Where their own version is served, when a host serves it at an address of its own. */
@@ -150,8 +162,18 @@ export class Site {
     return this.root;
   }
 
-  identify(request: Parameters<Identity>[0]) {
-    return this.options.identity(request);
+  /** Who sent a request: someone signed in, or failing that a guest, if guests are allowed. */
+  async identify(request: Parameters<Identity>[0]): Promise<Person | null> {
+    const person = await this.options.identity(request);
+    if (person || !this.options.guests) return person;
+    return guestFrom(request, this.options.guests.secret);
+  }
+
+  /** A cookie that makes whoever holds it a guest from now on. Null when guests aren't allowed. */
+  welcome(): string | null {
+    const secret = this.options.guests?.secret;
+    if (!secret) return null;
+    return `${GUEST_COOKIE}=${guestToken(secret, randomBytes(9).toString("hex"))}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`;
   }
 
   level(person: Person | null): Level {
@@ -237,6 +259,8 @@ export class Site {
       live: this.isLive(version, person),
       stale: !!mine?.stale,
       mode: this.push ? "push" : "swap",
+      canJoin: !person && !!this.options.guests,
+      note: level === "member" ? this.options.trust.memberNote : undefined,
       ownUrl: mine?.url,
       proposals,
     };
@@ -258,7 +282,13 @@ export class Site {
     const entry = this.counts.get(person.id);
     const sent = entry?.day === day ? entry.sent : 0;
     if (sent >= (this.options.trust.memberDailyLimit ?? 20)) throw new RequestError("That's the limit for today. Try again tomorrow.", 429);
+    const all = this.counts.get("*");
+    const total = all?.day === day ? all.sent : 0;
+    const cap = this.options.trust.dailyLimit;
+    if (cap !== undefined && total >= cap)
+      throw new RequestError("This app has taken all the requests it can today. Try again tomorrow.", 429);
     this.counts.set(person.id, { day, sent: sent + 1 });
+    this.counts.set("*", { day, sent: total + 1 });
   }
 
   /** The requests this person may see: everyone's, their own, and for owners all of them. */
@@ -403,6 +433,8 @@ export class Site {
       env: this.options.agentEnv,
       dataDir: join(this.root, DATA, "jobs", id),
       allowedPaths: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberPaths : undefined),
+      limitsNote: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberNote : undefined),
+      check: (job, files) => (this.level(job.by ?? null) === "member" ? (this.options.trust.memberCheck?.(files) ?? null) : null),
       onStart: (job) => void this.startLive(version, job),
       sandbox: (job) => {
         const rule = this.options.sandbox;
@@ -534,6 +566,7 @@ export class Site {
       if (app.build) await runStep(app.build, appDir(dir, app), app.env);
       await writeFile(built, "");
     }
+    this.makeRoom(version);
     const process = await AppProcess.start(app.start, appDir(dir, app), app);
     const old = version.release;
     version.release = { sha, dir, process };
@@ -544,6 +577,16 @@ export class Site {
         if (old.dir !== dir) void this.git(this.root, ["worktree", "remove", "--force", old.dir]).catch(() => "");
       }, this.options.lingerMs ?? 120_000).unref();
     }
+  }
+
+  /** Before starting a person's copy, stop the least recently used ones if too many are running. */
+  private makeRoom(starting: Version) {
+    const max = this.options.maxCopies;
+    if (max === undefined || starting === this.main) return;
+    const running = [...this.own.values()]
+      .filter((version) => version !== starting && version.release && !version.release.process.exited && !version.lane.busy)
+      .sort((a, b) => a.usedAt - b.usedAt);
+    while (running.length >= max) running.shift()?.release?.process.stop();
   }
 
   /** Stop copies nobody is using. Everyone's version always stays up. */
@@ -557,6 +600,17 @@ export class Site {
       }
       if (version !== this.main && version.release && !version.lane.busy && now - version.usedAt > idle) {
         version.release.process.stop();
+      }
+      // A guest who hasn't come back is forgotten, along with their version.
+      const forget = this.options.guests?.forgetMs;
+      if (
+        forget !== undefined &&
+        version.person?.id.startsWith("guest:") &&
+        !version.lane.busy &&
+        !version.building &&
+        now - version.usedAt > forget
+      ) {
+        void this.remove(version);
       }
     }
   }

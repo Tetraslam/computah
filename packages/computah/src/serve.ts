@@ -31,6 +31,10 @@ export interface Config {
   /** How many times the agent may try to fix a change that doesn't build. Default 3. */
   repairs?: number /** Run the agent in a sandbox: `{ in: exeSandbox() }`, for members only unless `for: "everyone"`. */;
   sandbox?: { in: Sandbox; for?: "members" | "everyone" };
+  /** Let people who aren't signed in take part as guests. Needs `trust.members: "everyone"`. */
+  guests?: { secret: string; forgetMs?: number };
+  /** The most personal copies running at once. */
+  maxCopies?: number;
 }
 
 export async function serveSite(argv: string[]): Promise<never> {
@@ -61,6 +65,8 @@ export async function serveSite(argv: string[]): Promise<never> {
     release: config.release,
     repairs: config.repairs,
     sandbox: config.sandbox,
+    guests: config.guests,
+    maxCopies: config.maxCopies,
   });
   const port = Number(values.port ?? config.port ?? 8000);
   const host = config.host ?? "0.0.0.0";
