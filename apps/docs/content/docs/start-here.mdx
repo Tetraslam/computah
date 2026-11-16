@@ -1,9 +1,9 @@
 ---
 title: start here
-description: the box in your app on your laptop, changing your code as you watch
+description: getting the box running on your laptop
 ---
 
-You need three things: a React app, a git repository it lives in, and one of [Claude Code](https://claude.com/claude-code), [OpenCode](https://opencode.ai) or [Codex](https://github.com/openai/codex) installed and signed in. computah doesn't bring its own agent. It drives the one you already use.
+this gets the box into your app on your own machine, where it edits your code and hot reload shows you the result. you need a react app in a git repo, and one of [claude code](https://claude.com/claude-code), [opencode](https://opencode.ai) or [codex](https://github.com/openai/codex) installed and signed in. computah doesn't come with its own agent, it uses whichever one you already have
 
 ## install it
 
@@ -13,7 +13,7 @@ pnpm add @tetraslam13/computah
 
 ## put the box in your app
 
-It can go anywhere. In a Next app the root layout is a good spot, so it's on every page:
+it can go anywhere. in a next app i put it in the root layout so it's on every page:
 
 ```tsx title="app/layout.tsx"
 import { Computah } from "@tetraslam13/computah";
@@ -34,42 +34,40 @@ export default function RootLayout({
 }
 ```
 
-The box draws itself in a shadow root, so your styles and its styles never touch. It has no dependencies beyond React.
+it draws itself inside a shadow root so your styles and its styles never touch each other, and it doesn't depend on anything except react
 
-## run the runner next to your dev server
+## run the runner
 
-The box is only a window. The runner is the part that hands your words to the agent. Start your dev server through it:
+the box is only the window. the thing that actually hands your words to the agent is called the runner, and the way to start it is to run your dev server through it:
 
 ```json title="package.json"
 { "scripts": { "dev": "computah -- next dev" } }
 ```
 
-Everything after `--` runs alongside the runner, and stopping one stops the other. The runner listens on `127.0.0.1:4821` and only answers this machine. It uses the first agent it finds installed, in the order `claude`, `opencode`, `codex`. To pick one, say so: `computah --agent codex -- next dev`.
+whatever you put after the `--` runs alongside it, and stopping one stops the other. it uses the first agent it finds installed (it looks for `claude`, then `opencode`, then `codex`), and if you want a specific one you can say so with `computah --agent codex -- next dev`
 
-## open it
+## use it
 
-Open your app and press `Ctrl+.` (`⌘.` on a Mac), or click the small window button in the bottom right corner. Type what should be different and press return. Shift and return makes a new line.
+open your app and press `Ctrl+.` (`⌘.` on a mac), or click the tiny window button in the bottom right. type what should be different and press return (shift+return if you want a new line)
 
-## what you'll see
+while it works you get one line telling you what the agent is doing right now, like "reading page.tsx" or "editing counter.tsx", and the page changes under you as it saves files. there's a steps link if you want to see everything it did and a stop link if you change your mind. when it's finished it tells you what it changed in a sentence or two, and there's an undo right there
 
-- Your request, and under it one line saying what the agent is doing right now, like "reading page.tsx" or "editing counter.tsx", with a clock.
-- A steps link that shows every step it has taken so far, and a stop link.
-- Hot reload showing the change on the page as the files are saved.
-- When it's done, the agent's own one or two sentences about what changed, and an undo link.
+## other stuff it does
 
-A few more things it does without being asked:
+| | |
+| --- | --- |
+| knows where you were | the page you were on, any text you had selected, your window size, and anything you pointed at with the "point at it" button all get sent to the agent |
+| queues | you can send a bunch of requests in a row and they run one at a time, in order |
+| commits | each change is its own commit named `computah: ` plus the start of what you typed. if a change touches a file where you had uncommitted edits it stays uncommitted, so your work and the agent's don't get mixed together. `--no-commit` turns this off |
+| cleans up | if a request fails or you stop it, none of its edits are kept |
+| undoes carefully | undo won't overwrite anything edited since. if later work touched the same lines it tells you and leaves everything alone |
 
-- **It knows where you were.** The page, the text you had selected, the window size, and an element you pointed at (with the "point at it" button) all go to the agent. Here's what it would send from this card:
+this is what it would send from this card if you asked for something right now:
 
 <Playground name="start-here" />
 
-- **It queues.** Send several requests and they run one at a time, in order.
-- **It commits.** Each finished change is its own commit, named `computah: ` and the start of your request. If a change touches a file you already had uncommitted edits in, it's left uncommitted instead, so your work and the agent's don't get mixed. Pass `--no-commit` to never commit.
-- **It leaves no mess.** A request that fails or that you stop keeps none of its edits.
-- **Undo is careful.** It never overwrites edits made since. If later work touches the same lines, it says so and changes nothing.
+it keeps its records in a `.computah` folder in your repo and hides that folder from `git status` without touching your `.gitignore`
 
-The runner keeps its records in a `.computah` folder in your repository, and hides that folder from `git status` without touching your `.gitignore`.
+## if it says the runner isn't running
 
-## if the box says the runner isn't running
-
-That means nothing is answering on `127.0.0.1:4821`. Start your dev server through `computah` as above. The box keeps checking and notices when it's up.
+that means nothing is answering on `127.0.0.1:4821`, which is where the runner listens. start your dev server through `computah` like above and the box will notice on its own, it keeps checking

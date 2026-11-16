@@ -45,7 +45,7 @@ export default function Reference() {
       <div style={{ display: "flex", gap: 24, marginTop: 14, flexWrap: "wrap" }}>
         {[true, false].map((mac) => (
           <div key={String(mac)}>
-            <div style={{ font: "700 11px/1 var(--ui)" }}>{mac ? "on a Mac" : "everywhere else"}</div>
+            <div style={{ font: "700 11px/1 var(--ui)" }}>{mac ? "on a mac" : "everywhere else"}</div>
             <div style={{ marginTop: 6, padding: "4px 10px", border: "1px solid #000", borderRadius: 4, font: "700 15px/1.2 var(--ui)" }}>
               {label(value, mac)}
             </div>

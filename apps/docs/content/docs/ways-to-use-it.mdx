@@ -1,19 +1,17 @@
 ---
 title: ways to use it
-description: from one person on a laptop to a whole community
+description: the different setups, from laptop to public site
 ---
 
-The box is the same everywhere. What changes is where the runner lives and who is allowed to type.
+the box is the same everywhere, what changes is where the runner lives and who gets to type. a little table :3
 
-| you are | you set up | what happens when someone types in the box |
+| you're | you set up | when someone types in the box |
 | --- | --- | --- |
-| [building an app on your laptop](/start-here) | `<Computah />` and `computah -- next dev` | the code on your laptop changes, and hot reload shows it in seconds |
-| [using a personal app every day](/serve-it) | the app on a small always-on machine, `computah serve`, you as owner | the app changes for you from any device, phone included |
-| [sharing an app with family or friends](/people-and-trust) | the same, with them listed as `trusted` | it changes for everyone, and anyone trusted can undo it |
-| [running an app for a community](/people-and-trust) | the same, with `members: "everyone"` | each person changes a version of their own. You promote the good ones to everybody |
-| [running a public app anyone can visit](/guests) | the same, with `guests`, `clientOnly()` pieces and ideally a sandbox | someone who isn't signed in changes the framed pieces, in a version only they see |
-| [hosting on Vercel](/on-vercel) | a runner on another machine, `release: { push }`, one route in the app | the change is pushed to GitHub and Vercel builds it. Members get a preview link |
+| [building an app on your laptop](/start-here) | `<Computah />` and `computah -- next dev` | your code changes and hot reload shows it in seconds |
+| [using your own app every day](/serve-it) | an always-on machine, `computah serve`, you as owner | it changes for you from any device, phone included |
+| [sharing it with family or friends](/people-and-trust) | the same, with them listed as `trusted` | it changes for everyone, and anyone trusted can undo it |
+| [running it for a community](/people-and-trust) | the same, with `members: "everyone"` | everyone changes their own version and you promote the good ones |
+| [running a public app](/guests) | the same, plus `guests`, `clientOnly()` pieces and ideally a sandbox | strangers change the framed pieces in a version only they see |
+| [hosting on vercel](/on-vercel) | a runner on another machine, `release: { push }` and one route in the app | it gets pushed to github and vercel builds it. members get a preview link |
 
-The first row is two lines. Every other row is one config file, `computah.config.mjs`, that names your build commands, your owners, and how to tell who is visiting.
-
-If your always-on machine is on [exe.dev](/on-exe-dev), its login already says who each visitor is, so that part of the config is one word.
+the first row is two lines, and every other row is one config file (`computah.config.mjs`) saying how to build the app, who owns it and how to tell who's visiting. on [exe.dev](/on-exe-dev) that last part is one word cause its login already knows

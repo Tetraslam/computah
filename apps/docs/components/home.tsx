@@ -14,7 +14,7 @@ export function Recording() {
           alt="Typing a request into the box and watching a counter on the page become a stopwatch."
         />
       </picture>
-      <figcaption className="recording-caption">a request typed into the box, and the page changing while the agent works</figcaption>
+      <figcaption className="recording-caption">me asking for a stopwatch and watching the counter turn into one</figcaption>
     </figure>
   );
 }

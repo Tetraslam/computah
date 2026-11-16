@@ -1,9 +1,9 @@
 ---
 title: adapters
-description: the agent, who's visiting, the host and the sandbox, each swappable
+description: swapping the agent, identity, host or sandbox
 ---
 
-The parts of computah that touch the outside world are meant to be swapped. Each has a few built in, and each is small enough to write yourself.
+every part that touches the outside world can be swapped, and each is small enough to write your own
 
 | kind | built in | your own |
 | --- | --- | --- |
@@ -13,19 +13,13 @@ The parts of computah that touch the outside world are meant to be swapped. Each
 | host | `vercel` | an object with `deployed()` |
 | sandbox | `exeSandbox`, `modalSandbox` | an object with `open()`, see [sandboxes](/sandboxes) |
 
-Everything here comes from `@tetraslam13/computah/server`.
+all of it comes from `@tetraslam13/computah/server`
 
 ## agents
 
-The built-in agents run the real command line tools, headless, in the app's repository:
+the built-ins run the real cli headless in the repo: `claude -p` with streaming json and permission to edit, `opencode run` with json, and `codex exec` with json, sandboxed to the workspace. each takes `{ model, args }`, and in the config `agent: "claude"` plus `model: "..."` does the same
 
-- **`claude`** runs `claude -p` with its streaming JSON output, allowed to edit files.
-- **`opencode`** runs `opencode run` with its JSON output.
-- **`codex`** runs `codex exec` with its JSON output, sandboxed to the workspace.
-
-Each takes `{ model, args }`: a model in the agent's own format, and extra arguments for its command. In the config, `agent: "claude"` and `model: "..."` do the same.
-
-An agent of your own is an object with a name and two functions. `command` says what to run for one request. `parse` turns one line of its output into events:
+your own is a name plus `command` (what to run for one request) and `parse` (one line of output into events):
 
 ```js title="computah.config.mjs"
 const mine = {
@@ -40,18 +34,27 @@ export default {
 };
 ```
 
-The events are `{ type: "text", text }` for what it says, `{ type: "tool", name, detail }` for what it does, `{ type: "error", message }` when it fails, and `{ type: "result", text }` for its closing words. Without a result, its last text is used. A command that exits with an error fails the request.
+| event | means |
+| --- | --- |
+| `{ type: "text", text }` | something it said |
+| `{ type: "tool", name, detail }` | something it did |
+| `{ type: "error", message }` | it failed |
+| `{ type: "result", text }` | its closing words, and without one its last text is used |
+
+a command that exits with an error fails the request
 
 ## identity
 
-Identity answers one question for every request: who is this? It returns a person, `{ id, name }`, or `null` for someone not signed in. The `id` must be stable, and impossible for a visitor to fake.
+identity says who sent each request: a person, `{ id, name }`, or `null` for not signed in. the `id` has to be stable and impossible for a visitor to fake
 
-- **`"exe"`** reads [exe.dev's login](/on-exe-dev).
-- **`"local"`** says anyone on this machine is you, and nobody else is anyone.
-- **`header(idHeader, nameHeader)`** reads the person from headers set by a proxy you control. The proxy must remove those headers from what visitors send, or anyone can claim to be anyone.
-- **`gateway(secret)`** believes the app's own server, when it sends the shared secret. It goes with the route on the [vercel](/on-vercel) card.
+| | |
+| --- | --- |
+| `"exe"` | reads [exe.dev's login](/on-exe-dev) |
+| `"local"` | anyone on this machine is you and nobody else is anyone |
+| `header(idHeader, nameHeader)` | reads headers set by a proxy you control, which has to strip them from what visitors send or anyone can be anyone |
+| `gateway(secret)` | believes the app's own server when it sends the secret, for the route on [on vercel](/on-vercel) |
 
-Your own is a function that gets the request (Node's `IncomingMessage`) and returns a person, or a promise of one:
+your own gets the request (node's `IncomingMessage`) and returns a person or a promise of one:
 
 ```js
 identity: (request) => {
@@ -63,15 +66,13 @@ identity: (request) => {
 
 ## hosts
 
-A host builds and serves what the runner pushes. Today there's `vercel`:
+a host builds and serves what the runner pushes, and so far there's `vercel`:
 
 ```js
 vercel({ projectId: "prj_...", teamId: "team_..." }); // teamId only for a team's project
 ```
 
-It reads its token from `VERCEL_TOKEN` (or `token`). It waits up to 90 seconds for Vercel to notice a push (`startTimeoutMs`), up to ten minutes for the build (`timeoutMs`), and asks every three seconds (`pollMs`).
-
-Your own host is an object with a name and one function:
+its token comes from `VERCEL_TOKEN` (or `token`), and it waits up to 90 seconds for vercel to notice a push (`startTimeoutMs`) and ten minutes for the build (`timeoutMs`), asking every three seconds (`pollMs`). your own is a name and one function:
 
 ```js
 const myHost = {
@@ -83,4 +84,4 @@ const myHost = {
 };
 ```
 
-If it throws, the error's message goes to the agent as the reason the build failed.
+if it throws, the message goes to the agent as why the build failed

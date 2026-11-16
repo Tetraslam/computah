@@ -125,17 +125,17 @@ export function Find({ cards, from, onClose }: { cards: CardEntry[]; from: DOMRe
   const state = !query ? "idle" : isLoading || !data ? "working" : hits.length ? "done" : "none";
   const status =
     state === "idle"
-      ? "type a few words. every card that has them is listed."
+      ? "type some words and every card that has them shows up here"
       : state === "working"
-        ? "looking through the stack"
+        ? "looking through the cards"
         : state === "done"
           ? `${hits.length === 40 ? "40 or more" : hits.length} found`
-          : "no card says that.";
+          : "no card says that :(";
 
   return (
     <section ref={windowRef} className="find" role="dialog" aria-label="find" onKeyDown={onKey}>
       <header className="titlebar">
-        <button type="button" className="closebox" onClick={onClose} aria-label="Close" />
+        <button type="button" className="closebox" onClick={onClose} aria-label="close" />
         <span className="title">find</span>
       </header>
       <div className="find-field">
@@ -146,7 +146,7 @@ export function Find({ cards, from, onClose }: { cards: CardEntry[]; from: DOMRe
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="find what?"
-          aria-label="Find what?"
+          aria-label="find what?"
           aria-controls="find-results"
           aria-activedescendant={hits[selected] ? `hit-${selected}` : undefined}
           autoComplete="off"
@@ -158,7 +158,7 @@ export function Find({ cards, from, onClose }: { cards: CardEntry[]; from: DOMRe
         {status}
       </p>
       {hits.length > 0 && (
-        <ul ref={list} id="find-results" className="find-results" aria-label="Results">
+        <ul ref={list} id="find-results" className="find-results" aria-label="results">
           {hits.map((hit, at) => (
             <li key={hit.id}>
               <Link
@@ -186,7 +186,7 @@ export function Find({ cards, from, onClose }: { cards: CardEntry[]; from: DOMRe
         </ul>
       )}
       <p className="find-hint">
-        <span className="kbd">↑</span> <span className="kbd">↓</span> to choose, <span className="kbd">return</span> to open,{" "}
+        <span className="kbd">↑</span> <span className="kbd">↓</span> to pick, <span className="kbd">return</span> to open,{" "}
         <span className="kbd">esc</span> to close
       </p>
     </section>

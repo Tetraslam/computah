@@ -5,7 +5,13 @@ import { useState } from "react";
 // A little card of your own. Everything here is plain React: ask the box to change any of it.
 export default function Home() {
   const [presses, setPresses] = useState(0);
-  const words = ["hello.", "hello again.", "still here.", "you can change me, you know.", "go on, open the box."];
+  const words = [
+    "hi",
+    "hi again",
+    "okay you can stop pressing now",
+    "you could change me into something else instead lol",
+    "open the box and tell it what i should be :3",
+  ];
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
@@ -29,7 +35,7 @@ export default function Home() {
         <p style={{ margin: 0, font: "19px/1.35 var(--words)" }}>{words[Math.min(presses, words.length - 1)]}</p>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
           <button type="button" className="push" onClick={() => setPresses(presses + 1)}>
-            Press
+            press
           </button>
           <span style={{ font: "12px/1 var(--ui)", fontVariantNumeric: "tabular-nums" }}>
             pressed {presses} {presses === 1 ? "time" : "times"}

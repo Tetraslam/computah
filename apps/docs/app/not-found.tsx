@@ -6,12 +6,12 @@ export default function NotFound() {
       <article className="card">
         <header>
           <h1 className="card-title">no such card</h1>
-          <p className="card-lede">this stack doesn't have a card at that address.</p>
+          <p className="card-lede">there's no card at this address, maybe it got renamed</p>
           <hr className="rule" />
         </header>
         <div className="prose">
           <p>
-            <Link href="/">go to the home card</Link>, or press <span className="kbd">/</span> to find something.
+            <Link href="/">go back to the home card</Link>, or press <span className="kbd">/</span> to look for what you wanted
           </p>
         </div>
       </article>

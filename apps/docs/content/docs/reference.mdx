@@ -1,7 +1,9 @@
 ---
 title: reference
-description: every prop, flag and config field, as the source has them
+description: every prop, flag and config field
 ---
+
+every prop, flag and config field, as the source has them. it's the long boring card, sorry
 
 ## the box: `<Computah>`
 
@@ -11,18 +13,18 @@ import { Computah } from "@tetraslam13/computah";
 
 | prop | default | |
 | --- | --- | --- |
-| `hotkey` | `"mod+."` | the keys that open and close the box. `mod` is ⌘ on a Mac and Ctrl elsewhere. `ctrl`, `meta`, `shift` and `alt` work too, joined with `+` |
+| `hotkey` | `"mod+."` | opens and closes it. `mod` is ⌘ on a mac and ctrl elsewhere, and `ctrl`, `meta`, `shift`, `alt` join with `+` |
 | `title` | `"improvements"` | the window's title |
-| `launcher` | `true` | show the small button that opens it |
+| `launcher` | `true` | the small button that opens it |
 | `defaultOpen` | `false` | start open |
-| `endpoint` | found for you | where the runner is. Without it, the box asks the page's own address at `/__computah` first (a runner serving the app). On a page served from this machine (`localhost`, `127.0.0.1`) it then tries `http://127.0.0.1:4821`. Anywhere else, with no runner found, the box doesn't show at all |
-| `secret` | none | sent as a bearer token, for a runner started with `--secret` |
+| `endpoint` | found for you | where the runner is. unset, it tries `/__computah` on the page's own address, then `http://127.0.0.1:4821` but only on pages from this machine (`localhost`, `127.0.0.1`). no runner found anywhere else means no box |
+| `secret` | none | bearer token, for a runner started with `--secret` |
 
-Try a `hotkey`:
+you can try a `hotkey` here:
 
 <Playground name="reference" />
 
-The box remembers whether it was open, what you'd typed, and where you dragged it, for as long as the tab is open.
+it remembers whether it was open, your draft and where you dragged it, for as long as the tab stays open
 
 ## the runner: `computah`
 
@@ -33,106 +35,106 @@ computah serve [--config computah.config.mjs] [--port 8000] [--cwd .]
 
 | flag | default | |
 | --- | --- | --- |
-| `--agent` | the first one installed | `claude`, `opencode` or `codex` |
-| `--model` | the agent's own | a model to pass to the agent |
-| `--port` | `4821` | where the runner listens |
+| `--agent` | first one installed | `claude`, `opencode` or `codex` |
+| `--model` | the agent's own | model passed to the agent |
+| `--port` | `4821` | where it listens |
 | `--host` | `127.0.0.1` | anything else needs `--secret` |
-| `--secret` | `COMPUTAH_SECRET` | require this as a bearer token |
-| `--origin` | none | allow a page from another address. Give it once per address |
+| `--secret` | `COMPUTAH_SECRET` | required bearer token |
+| `--origin` | none | allow a page from another address. once per address |
 | `--no-commit` | | leave changes uncommitted |
-| `--cwd` | here | the repository to work in |
-| `--help` | | print all of this |
+| `--cwd` | here | the repo to work in |
+| `--help` | | prints this |
 
-For `computah serve`: `--config` is the config file, `--port` overrides the config's port, and `--cwd` is the repository.
+for `computah serve`, `--config` is the config file, `--port` overrides the config's port and `--cwd` is the repo
 
 ## the config: `computah.config.mjs`
 
-Its default export is read by `computah serve`.
+`computah serve` reads its default export
 
 | field | default | |
 | --- | --- | --- |
-| `agent` | the first one installed | `"claude"`, `"opencode"`, `"codex"`, or an [agent object](/adapters) |
+| `agent` | first one installed | `"claude"`, `"opencode"`, `"codex"`, or an [agent object](/adapters) |
 | `model` | | passed to a built-in agent |
-| `app` | | how to install, build and run the app, below |
-| `identity` | required | `"exe"`, `"local"`, or a function from a request to a person. See [adapters](/adapters) |
-| `trust` | required, with at least one owner | who may do what, below |
-| `port` | `8000` | where the runner listens |
-| `host` | `"0.0.0.0"` | which interface it listens on |
-| `idleMs` | 20 minutes | stop a personal copy nobody has used for this long |
-| `agentEnv` | | extra environment variables for the agent |
-| `release` | build and serve here | `{ push: { ... } }` to push changes to a host instead, below |
-| `repairs` | `3` | how many times the agent may try to fix a change that doesn't build |
-| `sandbox` | none | run the agent in a [sandbox](/sandboxes), below |
-| `guests` | none | let people who aren't signed in take part as [guests](/guests), below |
-| `maxCopies` | no limit | the most personal copies running at once. Starting one more stops the one used longest ago |
+| `app` | | how to install, build and run it. below |
+| `identity` | required | `"exe"`, `"local"`, or a function from request to person. see [adapters](/adapters) |
+| `trust` | required, at least one owner | who may do what. below |
+| `port` | `8000` | where it listens |
+| `host` | `"0.0.0.0"` | which interface |
+| `idleMs` | 20 minutes | stop a personal copy unused this long |
+| `agentEnv` | | extra env vars for the agent |
+| `release` | build and serve here | `{ push: { ... } }` to push to a host instead. below |
+| `repairs` | `3` | tries the agent gets to fix a change that doesn't build |
+| `sandbox` | none | run the agent in a [sandbox](/sandboxes). below |
+| `guests` | none | let people who aren't signed in take part as [guests](/guests). below |
+| `maxCopies` | no limit | personal copies running at once, one more stops the oldest-used |
 
 ### `app`
 
-Each command runs in a shell, in the app's folder, with `PORT` set.
+each command runs in a shell in the app's folder, with `PORT` set
 
 | field | default | |
 | --- | --- | --- |
-| `dir` | the repository's root | the app's folder inside the repository |
-| `install` | | install dependencies in a fresh copy, for example `pnpm install --frozen-lockfile` |
-| `build` | | build a copy for serving, for example `pnpm build` |
-| `start` | required, unless pushing | serve the built copy on `$PORT`, for example `pnpm start` |
-| `dev` | | serve a copy with hot reload on `$PORT`, so the person who asked watches their change live |
-| `health` | `"/"` | the path that answers when the app is up |
-| `startTimeoutMs` | 90 seconds | how long a copy may take to start answering |
-| `env` | | extra environment variables for every command |
+| `dir` | repo root | the app's folder inside the repo |
+| `install` | | installs deps in a fresh copy, like `pnpm install --frozen-lockfile` |
+| `build` | | builds a copy for serving, like `pnpm build` |
+| `start` | required, unless pushing | serves the built copy on `$PORT`, like `pnpm start` |
+| `dev` | | a hot-reloading copy on `$PORT` for watching live |
+| `health` | `"/"` | the path that answers when it's up |
+| `startTimeoutMs` | 90 seconds | how long a copy gets to start answering |
+| `env` | | extra env vars for every command |
 
 ### `trust`
 
 | field | default | |
 | --- | --- | --- |
-| `owners` | required | ids or names (such as emails) of the owners |
-| `trusted` | nobody | the same, for trusted people |
-| `members` | nobody | a list, or `"everyone"` who is signed in |
-| `memberPaths` | anything | files a member's change may touch, as globs from the repository's root |
-| `memberNote` | none | what members may change, in a sentence for them. Shown in their box |
-| `memberRules` | `memberNote` | rules for a member's change beyond `memberPaths`, for the agent |
-| `memberCheck` | none | `(files: { path, content }[]) => string or null`: given each changed file's new contents (`null` for a deleted file), say why the change isn't acceptable, or `null`. `clientOnly()` is one |
-| `memberDailyLimit` | `20` | requests a member may send per day |
-| `dailyLimit` | no limit | requests all members together may send per day |
+| `owners` | required | ids or names (emails work) |
+| `trusted` | nobody | same, for trusted people |
+| `members` | nobody | a list, or `"everyone"` signed in |
+| `memberPaths` | anything | globs from the repo root a member's change may touch |
+| `memberNote` | none | one sentence for members. shown in their box |
+| `memberRules` | `memberNote` | rules for the agent, beyond `memberPaths` |
+| `memberCheck` | none | `(files: { path, content }[]) => string or null`, given new contents (`null` if deleted), returns why it's not okay or `null`. `clientOnly()` is one |
+| `memberDailyLimit` | `20` | requests per member per day |
+| `dailyLimit` | no limit | requests per day, all members together |
 
 ### `release.push`
 
 | field | default | |
 | --- | --- | --- |
-| `remote` | `"origin"` | the git remote to push to |
+| `remote` | `"origin"` | git remote to push to |
 | `branch` | `"main"` | the branch the host serves to everyone |
-| `host` | none | who builds what's pushed. Without one, a change counts as live once the push lands |
-| `check` | `true` when `app.build` is set | build on the runner before pushing, to catch a broken build early |
+| `host` | none | who builds what's pushed. without one, a change counts as live once the push lands |
+| `check` | `true` when `app.build` is set | build on the runner before pushing |
 
 ### `sandbox`
 
 | field | default | |
 | --- | --- | --- |
 | `in` | required | a `Sandbox`: `exeSandbox()`, `modalSandbox()`, or [your own](/sandboxes) |
-| `for` | `"members"` | `"members"` sandboxes everyone who isn't an owner or trusted. `"everyone"` sandboxes every request |
+| `for` | `"members"` | `"members"`: everyone who isn't owner or trusted. `"everyone"`: every request |
 
 ### `guests`
 
-Needs `trust.members: "everyone"`.
+needs `trust.members: "everyone"`.
 
 | field | default | |
 | --- | --- | --- |
 | `secret` | required | signs the cookie that remembers each guest |
-| `forgetMs` | never | remove a guest's version once they've been away this long |
+| `forgetMs` | never | deletes a guest's version once they've been gone this long |
 
 ## server helpers
 
-All from `@tetraslam13/computah/server`.
+all of these come from `@tetraslam13/computah/server`
 
 | helper | |
 | --- | --- |
-| `clientOnly({ imports })` | a `memberCheck`: every changed file must start with `"use client"`, must not contain `"use server"`, may not be deleted, may not load code by a computed name, and may import only `imports` (default `["react"]`) |
-| `exeSandbox(options)` | a sandbox on exe.dev. Options `egress`, `setup`, `ssh`, `prefix`: see [sandboxes](/sandboxes) |
-| `modalSandbox(options)` | a sandbox on Modal. Options `app`, `image`, `build`, `secrets`, `blockNetwork`, `timeoutMs`: see [sandboxes](/sandboxes) |
+| `clientOnly({ imports })` | a `memberCheck`: files must start with `"use client"`, can't contain `"use server"`, can't be deleted or load code by a computed name, and import only `imports` (default `["react"]`) |
+| `exeSandbox(options)` | sandbox on exe.dev. `egress`, `setup`, `ssh`, `prefix`. see [sandboxes](/sandboxes) |
+| `modalSandbox(options)` | sandbox on modal. `app`, `image`, `build`, `secrets`, `blockNetwork`, `timeoutMs`. see [sandboxes](/sandboxes) |
 | `vercel(options)` | a host. `projectId` (required), `teamId`, `token` (default `VERCEL_TOKEN`), `timeoutMs` (10 minutes), `startTimeoutMs` (90 seconds), `pollMs` (3 seconds) |
-| `gateway(secret)` | an identity that believes the app's own server, when it sends `secret`. Pairs with `createProxy` |
-| `header(idHeader, nameHeader)` | an identity read from headers set by a proxy you control |
-| `exe()`, `local()` | the identities behind `"exe"` and `"local"` |
+| `gateway(secret)` | identity that believes the app's server when it sends `secret`. pairs with `createProxy` |
+| `header(idHeader, nameHeader)` | identity from headers set by a proxy you control |
+| `exe()`, `local()` | what `"exe"` and `"local"` mean |
 
 ## the route: `createProxy`
 
@@ -142,13 +144,21 @@ import { createProxy } from "@tetraslam13/computah/next";
 
 | option | default | |
 | --- | --- | --- |
-| `runner` | required | the runner's address, for example `https://runner.example.com` |
-| `secret` | required | the same secret the runner's `gateway(secret)` was given |
-| `identify` | required | `(request) => ({ id, name }) or null`, from the app's own sign-in |
+| `runner` | required | the runner's address, like `https://runner.example.com` |
+| `secret` | required | the secret the runner's `gateway(secret)` got |
+| `identify` | required | `(request) => ({ id, name }) or null`, from your app's sign-in |
 | `basePath` | `"/api/computah"` | where the route is mounted |
 
-It returns `{ GET, POST }`.
+it returns `{ GET, POST }`
 
-## what the server entry exports
+## everything the server entry exports
 
-From `@tetraslam13/computah/server`: the agents `claude`, `opencode`, `codex` and `agents`; the identities `exe`, `local`, `header` and `gateway`; the member check `clientOnly`; the host `vercel`; the sandboxes `exeSandbox` and `modalSandbox`; types for writing your own parts, such as `Trust`, `Person`, `Identity`, `Sandbox`, `SandboxSession`, `Host` and `PushOptions`; and, for building your own runner, `Computah`, `Site`, `serve`, `createRunnerServer`, `createFrontServer` and `buildPrompt`, with their types.
+from `@tetraslam13/computah/server`:
+
+- **agents.** `claude`, `opencode`, `codex`, `agents`
+- **identities.** `exe`, `local`, `header`, `gateway`
+- **member check.** `clientOnly`
+- **host.** `vercel`
+- **sandboxes.** `exeSandbox`, `modalSandbox`
+- **types for your own parts.** `Trust`, `Person`, `Identity`, `Sandbox`, `SandboxSession`, `Host`, `PushOptions`, and more
+- **for your own runner.** `Computah`, `Site`, `serve`, `createRunnerServer`, `createFrontServer`, `buildPrompt`, with their types

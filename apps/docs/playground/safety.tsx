@@ -23,7 +23,7 @@ export default function Safety() {
 
   return (
     <div>
-      <p style={{ margin: 0, font: "16px/1.4 var(--words)" }}>Who's asking the runner to change your code?</p>
+      <p style={{ margin: 0, font: "16px/1.4 var(--words)" }}>who's asking the runner to change your code?</p>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, marginTop: 10 }}>
         {callers.map((each, index) => (
           <button
@@ -53,7 +53,7 @@ export default function Safety() {
         }}
       >
         <span style={{ font: "700 12px/1 var(--ui)" }}>{caller?.answer ? "refused" : "answered"}</span>
-        <span>{caller?.answer ?? "The runner takes the request and hands it to the agent."}</span>
+        <span>{caller?.answer ?? "the runner takes it and hands it to the agent"}</span>
       </div>
     </div>
   );

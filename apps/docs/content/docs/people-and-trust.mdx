@@ -1,22 +1,22 @@
 ---
 title: people and trust
-description: who sees the box, and whose app a change goes into
+description: who sees the box and whose app a change goes into
 ---
 
-When the runner serves the app, everyone who visits is one of four levels. The `identity` in the config says who someone is, and `trust` says which level they get.
+when the runner serves the app, `identity` works out who someone is and `trust` gives them one of four levels
 
 | level | what the box does for them |
 | --- | --- |
-| owner | changes the app for everyone, undoes any change, and decides about other people's versions |
-| trusted | changes the app for everyone, and undoes any change to everyone's version |
-| member | changes a version of their own, which only they see. An owner can make it everyone's |
-| visitor | nothing. They never see the box, and the runner refuses them if they try anyway. If the app takes [guests](/guests), someone who isn't signed in becomes a member instead |
+| owner | changes it for everyone, undoes anything, and decides on other people's versions |
+| trusted | changes it for everyone and undoes anything in everyone's version |
+| member | changes their own version that only they see, which an owner can make everyone's |
+| visitor | nothing, they never see the box and the runner refuses them even by hand. with [guests](/guests) on, someone not signed in becomes a member instead |
 
-Pick a level to see what it allows:
+click through them here:
 
 <Playground name="people-and-trust" />
 
-## the trust part of the config
+## the config for it
 
 ```js
 trust: {
@@ -31,43 +31,36 @@ trust: {
 },
 ```
 
-- **`owners`** and **`trusted`** are lists of people. An entry matches a person's id or their name, ignoring case, so emails work.
-- **`members`** is either a list too, or `"everyone"` for anyone signed in. Leave it out and nobody is a member.
-- **`memberPaths`** limits which files a member's change may touch. They're globs from the root of the repository: `*` stays inside one folder, `**` crosses folders. A change that reaches outside them is taken back out. Leave it out and a member may change any file.
-- **`memberNote`** tells members, in a sentence, what they may change. They see it at the bottom of their box.
-- **`memberRules`** are the rules for a member's change beyond `memberPaths`, given to the agent. Leave it out and the agent gets `memberNote` instead.
-- **`memberCheck`** looks at a member's finished change and can refuse it: it gets each changed file's new contents and returns why the change isn't acceptable, or `null`. A refused change is taken back out. `clientOnly()` is a ready-made one, see [letting anyone change it](/guests).
-- **`memberDailyLimit`** is how many requests a member may send in a day. It's 20 unless you say otherwise. **`dailyLimit`** caps all members together, and has no cap unless you set one.
+| | |
+| --- | --- |
+| `owners`, `trusted` | lists matching someone's id or name, ignoring case, so emails work |
+| `members` | a list, or `"everyone"` signed in. without it nobody is a member |
+| `memberPaths` | globs from the repo root for the files a member's change may touch (`*` stays in one folder, `**` crosses them). anything outside gets taken back out, and without it any file is fair game |
+| `memberNote` | a sentence for members about what they can change, shown at the bottom of their box |
+| `memberRules` | rules for the agent on top of `memberPaths`, and the agent gets `memberNote` instead if you leave it out |
+| `memberCheck` | gets each changed file's new contents and returns why the change isn't okay (it gets taken back out) or `null`. `clientOnly()` is a ready-made one, see [letting anyone change it](/guests) |
+| `memberDailyLimit` | requests per member per day, 20 by default |
+| `dailyLimit` | a cap for all members together, none unless you set it |
 
-Anyone who is none of these is a visitor.
+anyone who isn't any of these is a visitor
 
-## a version of your own
+## your own version
 
-A member's first request makes them a version of the app: a git branch named `computah/u/` and a short form of their name. Their changes go there, and only they are served it. A copy of it starts when they show up and stops after 20 minutes of nobody using it.
+a member's first request makes them a version, a git branch named `computah/u/` plus a short form of their name, which only they get served. its copy starts when they show up and stops after 20 idle minutes, and whenever everyone's version changes it gets merged in so theirs stays current
 
-Owners and trusted people can have one too. Their box has a "for everyone" switch, and pressing it changes it to "just for me".
+owners and trusted people can have one too, their box has a "for everyone" switch that flips to "just for me". with your own version, the bottom of the box says which one you're on and links to the other
 
-Whoever has a version of their own sees a line at the bottom of the box saying which version they're looking at, with a link to the other one.
+## promoting and discarding
 
-When everyone's version changes, the runner merges it into each person's version, so theirs stays current.
+an owner's box lists other people's versions that have changes, with their requests and two links:
 
-<Note title="not done yet">
-If someone's own version conflicts with everyone's, it's marked as behind (their box says "yours is behind everyone's") and left alone. Nothing resolves the conflict yet.
-</Note>
+- **make it everyone's** merges and builds it. if it conflicts or doesn't build nothing changes and the box says why, and once it's merged their version goes away and they're back on everyone's
+- **discard** throws it away. the runner lets the person themselves discard it too but their box doesn't show that link yet, which i should fix
 
-## promote and discard
+## who sees and undoes what
 
-An owner's box lists other people's versions that have changes in them, with each request they made, and two links:
+everyone with the box sees requests to everyone's version plus their own, and owners see all of them. you can stop or undo your own, trusted people can also stop or undo anything in everyone's version (they could change it anyway), and owners can stop or undo anything. for people who aren't signed in, see [letting anyone change it](/guests)
 
-- **make it everyone's** merges that person's version into everyone's and builds it. If it conflicts with newer changes, or doesn't build, nothing changes and the box says why. Once it's merged, their own version is removed and they're back on everyone's.
-- **discard** throws that version away. The runner lets the person whose version it is discard it too, though their own box doesn't show that link yet.
+## what's not done
 
-## guests
-
-A public app can also let people who aren't signed in take part, as guests. That has its own card: [letting anyone change it](/guests).
-
-## who sees which requests
-
-Everyone who can use the box sees the requests made to everyone's version, plus their own. Owners see every request.
-
-Anyone may stop or undo their own requests. Trusted people may also stop or undo any request to everyone's version, since they can change it anyway. Owners may stop or undo anything.
+if someone's version conflicts with everyone's it gets marked behind ("yours is behind everyone's") and left alone, cause nothing resolves conflicts yet :(

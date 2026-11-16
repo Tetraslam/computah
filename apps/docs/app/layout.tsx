@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "computah", template: "%s · computah" },
   description:
-    "An improvements box for your app. Type what should change, and a coding agent you already have changes the code while you watch.",
+    "a little window you put in your app. you type what should be different and an agent you already have edits the code while you watch",
 };
 
 export const viewport: Viewport = {

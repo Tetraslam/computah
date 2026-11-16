@@ -6,7 +6,7 @@ export function Changes() {
   if (!changes.length) {
     return (
       <div className="empty">
-        <p>nothing yet. the first change made by typing will show up here.</p>
+        <p>nothing here yet. the first change someone types into the box will show up here</p>
       </div>
     );
   }

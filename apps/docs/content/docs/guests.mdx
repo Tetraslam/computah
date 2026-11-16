@@ -1,9 +1,9 @@
 ---
 title: letting anyone change it
-description: guests change chosen pieces of a public app, each in a version only they see
+description: letting strangers change chosen pieces of a public app
 ---
 
-For a public app, you can let people who aren't signed in change a few chosen pieces. Each of them gets a version of the app that only they see. Nothing they make reaches anyone else until an owner promotes it.
+for a public app where people who aren't signed in can change a few chosen pieces, each in a version only they see until an owner promotes it
 
 ```js title="computah.config.mjs"
 import { clientOnly, exeSandbox } from "@tetraslam13/computah/server";
@@ -28,29 +28,29 @@ export default {
 };
 ```
 
-## what each part does
+## the parts specific to this
 
-- **`guests`** turns it on. Someone who isn't signed in opens the box and becomes a guest: a random name kept in a cookie signed with `secret`, so nobody can pretend to be another guest. A guest is a member like any other. `forgetMs` removes a guest's version once they've been away that long.
-- **`members: "everyone"`** is required. Without it, a guest is a visitor and can't do anything.
-- **`memberPaths`** is the files a guest's change may touch. Keep it to the changeable pieces.
-- **`memberCheck: clientOnly()`** refuses a change that stops being a client component (`"use client"` first), declares server code, or imports anything but `react`. Pass `clientOnly({ imports: ["react", "..."] })` to allow more.
-- **`memberNote`** is shown to people, at the bottom of their box. **`memberRules`** is given to the agent; without it, the agent gets `memberNote`.
-- **`memberDailyLimit`** is how many requests one person may send in a day (20 unless you say). **`dailyLimit`** caps everyone together.
-- **`maxCopies`** caps how many personal copies run at once. Starting one more stops the one used longest ago.
-- **`sandbox`** runs a guest's agent on a throwaway machine. See [sandboxes](/sandboxes).
+| | |
+| --- | --- |
+| `guests` | turns it on. opening the box makes you a guest, a random name in a cookie signed with `secret` so nobody can pose as another guest, and otherwise a member like any other. `forgetMs` deletes their version once they've been gone that long |
+| `members: "everyone"` | required, otherwise a guest is a visitor and can't do anything |
+| `memberCheck: clientOnly()` | refuses a change that stops being a client component (`"use client"` first), declares server code, or imports anything but `react`. `clientOnly({ imports: ["react", "..."] })` lets more through |
+| `maxCopies` | personal copies running at once, and one more stops whichever was used longest ago |
 
-## what keeps this safe
+`memberPaths`, `memberNote`, `memberRules` and the limits work like for any member ([people and trust](/people-and-trust)), and `sandbox` is on [sandboxes](/sandboxes)
 
-- **A guest's code never runs on your server.** Load each changeable piece with `next/dynamic` and `ssr: false`, from a wrapper outside `memberPaths`. `clientOnly()` rejects a change that stops being a client component, declares server code, or imports anything but `react`.
-- **A guest's code runs only in their own browser.** Their changes live in their own version until an owner promotes one.
-- **A guest's agent sees only a copy of the code.** With a sandbox it runs on a throwaway machine, without your ignored files.
-- **Costs are capped.** Per-person and whole-app daily limits, a cap on running copies, and forgotten guests are cleaned up.
+## why this is safe
 
-A fix for a change that doesn't build is held to the same `memberPaths` and `memberCheck` as the change itself.
+- **a guest's code never runs on your server.** you load each changeable piece with `next/dynamic` and `ssr: false`, from a wrapper outside `memberPaths`, and `clientOnly()` rejects a change that stops being a client component, declares server code, or imports anything but `react`
+- **a guest's code runs only in their own browser.** their changes live in their own version until an owner promotes one
+- **a guest's agent sees only a copy of the code.** with a sandbox it runs on a throwaway machine, without your ignored files
+- **costs are capped.** there are per-person and whole-app daily limits and a cap on running copies, and guests who don't come back get cleaned up
 
-## this site works this way
+a fix for a broken build is held to the same `memberPaths` and `memberCheck` as the change
 
-The framed "yours to change" windows on these cards are files in `apps/docs/playground`. Each one is loaded by `apps/docs/components/playground.tsx` with `next/dynamic` and `ssr: false`, inside an error boundary, so a piece that breaks says so instead of taking the card down. The site is served with [`computah.docs.config.mjs`](https://github.com/tetraslam/computah/blob/main/computah.docs.config.mjs) at the root of the repository. In short:
+## this site does exactly this
+
+the "yours to change" windows are files in `apps/docs/playground`, loaded by `apps/docs/components/playground.tsx` with `next/dynamic` and `ssr: false` inside an error boundary, so breaking yours doesn't take the card down. the config is [`computah.docs.config.mjs`](https://github.com/tetraslam/computah/blob/main/computah.docs.config.mjs) at the repo root:
 
 ```js title="computah.docs.config.mjs"
 guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000 } : undefined,

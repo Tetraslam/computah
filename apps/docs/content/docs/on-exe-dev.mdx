@@ -1,9 +1,9 @@
 ---
 title: on exe.dev
-description: a small machine whose login already knows who's visiting
+description: running it on exe.dev, whose login already knows you
 ---
 
-[exe.dev](https://exe.dev) gives you a small always-on machine with a login in front of it. Its proxy tells the app who each signed-in visitor is, so the runner doesn't need a sign-in of its own. One word in the config uses it:
+[exe.dev](https://exe.dev) is a small always-on machine with a login in front, and its proxy tells the app who's visiting, so the runner needs no sign-in of its own. it's one word in the config:
 
 ```js title="computah.config.mjs"
 export default {
@@ -22,17 +22,15 @@ export default {
 };
 ```
 
-Then run `computah serve` on the machine and keep it running. The runner listens on port 8000 unless the config says otherwise.
+run `computah serve` on the machine and leave it running (port 8000 unless the config says otherwise)
 
 ## how it knows who you are
 
-exe.dev's proxy sets two headers on every request from someone signed in: `x-exedev-userid` and `x-exedev-email`. The runner takes the first as the person's id and the second as their name, so you list people in `trust` by email. The proxy also removes those headers from anything a visitor sends, which is what makes them safe to believe.
+the proxy sets `x-exedev-userid` and `x-exedev-email` on every signed-in request, which the runner reads as your id and name, so `trust` lists people by email. it also strips those headers from whatever visitors send, which is the only reason they can be believed, so if the runner is reachable any other way anyone can claim to be you. don't use `identity: "exe"` anywhere else
 
-That last part only holds behind exe.dev's proxy. If the runner can be reached any other way, anyone can send those headers and claim to be you. Don't use `identity: "exe"` anywhere else.
+## this repo does it
 
-## this repository does it
-
-computah's own demo is served this way. Its config picks exe.dev's login when it runs there, and this machine only everywhere else:
+computah's own demo runs like this, with exe.dev's login there and this-machine-only everywhere else:
 
 ```js title="computah.config.mjs"
 // How the demo is served with a version per person. Run `pnpm serve` at the repo root.

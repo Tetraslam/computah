@@ -37,12 +37,12 @@ export default function StartHere() {
     ["page", where?.url ?? ""],
     ["title", where?.title ?? ""],
     ["window", where?.size ?? ""],
-    ["selected", where?.selection || "nothing. select some words on this card."],
+    ["selected", where?.selection || "nothing yet, try selecting some words on this card"],
   ];
 
   return (
     <div>
-      <p style={{ margin: 0, font: "16px/1.4 var(--words)" }}>If you sent a request from here right now, the agent would also get:</p>
+      <p style={{ margin: 0, font: "16px/1.4 var(--words)" }}>if you sent a request from here right now the agent would also get this:</p>
       <dl style={{ margin: "10px 0 0", border: "1px solid #000" }}>
         {rows.map(([name, value], index) => (
           <div key={name} style={{ display: "flex", gap: 12, padding: "6px 10px", borderTop: index ? "1px dotted #000" : "none" }}>

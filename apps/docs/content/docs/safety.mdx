@@ -1,37 +1,35 @@
 ---
 title: safety
-description: the runner turns words into code changes, so who can reach it matters
+description: who can make the runner change your code
 ---
+
+the runner turns text into code changes, so who can reach it matters more than anything else. these are the exact rules
 
 ## on your laptop
 
-The development runner is careful about who it answers:
+the dev runner:
 
-- It listens on this machine only (`127.0.0.1`), checks that each connection really comes from this machine, and checks that the request was addressed to this machine by name. That last check stops a trick where another website points its own address at your computer.
-- It only answers browser requests from pages this machine served. Another website open in your browser can't use it, and neither can another computer on your network.
-- Anything that changes something must carry the box's own header and a JSON body, which a plain form or image on another site can't send.
+- listens on `127.0.0.1` only, checks each connection comes from this machine and that the request named this machine (which stops dns rebinding)
+- answers browser requests only from pages this machine served, so neither another site in your browser nor another computer on your network can use it
+- needs the box's header and a json body on anything that changes something, which a form or image on another site can't send
 
-To use it from elsewhere, start it with `--secret` and pass the same `secret` to the box. Anyone with the secret can change your code, so only give the box to people you'd give commit access. The runner refuses to listen beyond this machine without one. If your app is served from another address, allow it with `--origin`.
+to reach it from elsewhere, start it with `--secret` and give the box the same `secret`. anyone with it can change your code, so treat it like commit access. without a secret it won't listen beyond this machine, and an app on another address needs `--origin`. the agent runs with your permissions
 
-The agent runs with your permissions, the same as when you run it yourself.
-
-Try a few callers and see what the runner tells them:
+what the runner says to different callers:
 
 <Playground name="safety" />
 
 ## when the runner serves the app
 
-- **Who someone is** comes from `identity`, and nowhere else. Visitors never see the box, and the runner refuses their requests even if they send them by hand.
-- **A change must come from the app's own pages.** The runner checks that the page asking is on the same address as the app, and that the request carries the box's header and a JSON body. That stops another site from using a signed-in visitor's browser to send one.
-- **Members are fenced in.** A member's change only reaches their own version. `memberPaths` limits which files it may touch, `memberCheck` can refuse what it says, and a change that fails either is taken back out. So is a change whose build fix breaks them. Members get 20 requests a day unless you set `memberDailyLimit`, and `dailyLimit` caps them all together. Only owners can make a member's change everyone's.
-- **Guests' code stays in their browser.** On an app that takes [guests](/guests), each changeable piece is loaded only in the browser, and `clientOnly()` refuses a change that would make it run on your server. A guest's changes run only in their own browser until an owner promotes one.
-- **The agent can work in a [sandbox](/sandboxes).** It gets a copy of the code without your ignored files, and only a patch comes back.
-- **Requests are bounded.** A request can be up to 4000 characters, and the agent gets 15 minutes before it's stopped.
+- **identity comes from `identity` and nowhere else.** visitors never see the box and their hand-made requests are refused
+- **changes come from the app's own pages,** same address, with the box's header and a json body, so another site can't borrow a signed-in visitor's browser
+- **members are fenced in.** their changes only reach their own version, `memberPaths` limits the files and `memberCheck` the contents, and a change or build fix that breaks either gets taken back out. 20 requests a day unless you set `memberDailyLimit`, `dailyLimit` caps them all together, and only owners promote
+- **guests' code stays in their own browser.** how that works is on [letting anyone change it](/guests)
+- **the agent can work in a [sandbox](/sandboxes),** on a copy without your ignored files, and only a patch comes back
+- **requests are bounded:** 4000 characters, and 15 minutes of agent before it's stopped
 
-## the honest limits
+## the limits
 
-<Note title="not done yet">
-Without a sandbox, a member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while it works. With a sandbox the agent is contained, but the code it writes still runs on the serving machine once it's built.
-</Note>
+without a sandbox a member's agent has the same access to the machine as an owner's, and `memberPaths` limits what a change touches, not what the agent reads. with one the agent is contained, but the code it writes still runs on the serving machine once built
 
-What this means in practice: whatever someone types, the agent will try to do, with everything the agent can reach. Without a sandbox, a request can ask it to read a file and put what's in it on the page. So for people you don't know, use a sandbox, and keep what they change to browser-only pieces checked by `clientOnly()`. Without those, only let someone type into the box if you'd let them use an agent on that machine.
+whatever someone types, the agent will try with everything it can reach, and unsandboxed that includes reading a file and putting it on the page. so for strangers use a sandbox and browser-only pieces checked by `clientOnly()`, and otherwise only let people type who you'd let run an agent on that machine

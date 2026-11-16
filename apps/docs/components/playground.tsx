@@ -56,7 +56,7 @@ class Catch extends Component<{ children: ReactNode; size: Size }, { broken: boo
     if (!this.state.broken) return this.props.children;
     return (
       <div className="piece-broken reserve" style={reserve(this.props.size)} role="alert">
-        <p>this piece broke. ask the box to fix it.</p>
+        <p>this piece broke :( open the box and ask it to fix it</p>
         <button type="button" className="push small" onClick={() => this.setState({ broken: false })}>
           try again
         </button>
@@ -80,9 +80,9 @@ export function Playground({ name }: { name: PieceName }) {
         </Catch>
       </div>
       <p className="yours-foot">
-        this part is yours. open the box with <span className="kbd">Ctrl</span>+<span className="kbd">.</span>, or{" "}
+        this part is yours to mess with. open the box with <span className="kbd">Ctrl</span>+<span className="kbd">.</span> (or{" "}
         <span className="kbd">⌘</span>
-        <span className="kbd">.</span> on a Mac, and say how it should be different. only you will see your version.
+        <span className="kbd">.</span> on a mac) and say how it should be different, and only you will see your version
       </p>
     </section>
   );

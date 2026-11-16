@@ -48,10 +48,10 @@ export async function cardMarkdown(card: Card): Promise<string> {
         .map((other, at) => `${at + 2}. [${other.data.title}](${markdownUrl(other.url)}): ${other.data.description ?? ""}`)
         .join("\n"),
     )
-    .replace(/<Recording\s*\/>/, "![Typing a request into the box and watching a counter become a stopwatch](/demo.gif)")
+    .replace(/<Recording\s*\/>/, "![asking the box for a stopwatch and watching the counter turn into one](/demo.gif)")
     .replace(
       /<Playground name="([a-z-]+)"\s*\/>/g,
-      "_On the web page, a small interactive piece sits here (`apps/docs/playground/$1.tsx`). Visitors can change it by typing into the box._",
+      "_(on the web page there's a little interactive piece here, `apps/docs/playground/$1.tsx`, that visitors can change by typing into the box)_",
     )
     .replace(/<Note title="([^"]*)">\n?([\s\S]*?)\n?<\/Note>/g, (_, title: string, text: string) =>
       [`**${title}:**`, ...text.trim().split("\n")].map((line) => (line ? `> ${line}` : ">")).join("\n"),

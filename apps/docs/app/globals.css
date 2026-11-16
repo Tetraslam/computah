@@ -303,6 +303,10 @@ body {
   border-collapse: collapse;
   font: 15px / 1.4 var(--font-words);
 }
+/* A table whose columns need no names (a list of terms) drops its empty header row. */
+.prose thead:not(:has(th:not(:empty))) {
+  display: none;
+}
 .prose th {
   padding: 7px 10px 6px;
   border-bottom: 1px solid #000;

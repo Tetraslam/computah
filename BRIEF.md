@@ -64,7 +64,7 @@ sources looked at for it (the earlier study, plus the date book stack, the hyper
 hierarchy:
 
 - the home card: the name, big and centered in the serif, with one line under it. then what it is in a sentence, the recording, the two lines it takes, a note that this site is one too (with the visitor's own piece in its window), and the stack as a list of every card. the next arrow is the default button.
-- a doc card: the title in the serif, a one-line lede in italic, a rule, then the words. headings are the bold system face, small, because the card's title already says where you are. code sits black on white in a 1px frame, its name on a strip above with a copy button. what isn't done yet sits in a note under a dithered strip. the bottom edge carries the previous card, a house and "card n of m", and the next card.
+- a doc card: the title in the serif, a one-line lede in italic, a rule, then the words. headings are the bold system face, small, because the card's title already says where you are. code sits black on white in a 1px frame, its name on a strip above with a copy button. what isn't done yet is said plainly in a short section near the end of the card. the bottom edge carries the previous card, a house and "card n of m", and the next card.
 - around the cards: a menu bar (the stack's name, a cards menu, find, and the markdown twin of the card) and nothing else.
 
 what's different from the demo:
@@ -74,3 +74,5 @@ what's different from the demo:
 - the parts a visitor may change sit in a window inside the card, titled "yours to change" on a pinstriped bar. it's the only thing on a card that looks like the box, because it's the only thing the box may change for a visitor. a piece that breaks shows a dithered "this piece broke" state instead of taking the card down.
 - the changes card lists real commits made through the box, with the same marks as the box: solid for a change that stands, hollow and struck through for one undone. empty, it says so on a dithered field.
 - the recording is shown at its own pixel size so its dither stays 1-bit.
+
+voice: the owner explaining his own toy to friends in a discord channel. first person singular ("i", never "we"), all lowercase except code, relaxed sentences that run on with "and", "so", "cause" instead of punchy fragments or slogans. it says what it actually thinks, doubt and mild annoyance included ("i haven't tried that yet, so idk"), and allows the odd :3 or :( where the feeling is real. on serious topics (safety, trust, isolation) it gets exact and calm, with no jokes. never ad copy, tutorial voice ("let's", "simply", "note:"), or a brand trying to sound casual.

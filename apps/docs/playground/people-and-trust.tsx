@@ -23,7 +23,7 @@ export default function PeopleAndTrust() {
 
   return (
     <div>
-      <fieldset aria-label="Who are you?" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: 0, padding: 0, border: 0 }}>
+      <fieldset aria-label="who are you?" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: 0, padding: 0, border: 0 }}>
         {levels.map((each) => (
           <button
             key={each}

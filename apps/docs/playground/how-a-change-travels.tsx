@@ -10,24 +10,27 @@ interface Step {
 // The road a change takes when the runner serves the app. Flip "the build fails" to see the fix loop.
 function road(fails: boolean, tries: number): Step[] {
   const steps: Step[] = [
-    { name: "waits", says: "Your request waits its turn behind the one before it." },
-    { name: "live copy", says: "You're moved onto a hot-reloading copy and watch the agent work. Nobody else sees it." },
-    { name: "commit", says: "The agent finishes, and its change becomes one commit on your version's branch." },
-    { name: "build", says: "A fresh copy is installed, built and started on a free port." },
+    { name: "waits", says: "your request waits for the one before it to finish" },
+    { name: "live copy", says: "you get moved onto a hot-reloading copy and watch the agent work, and nobody else sees it" },
+    { name: "commit", says: "the agent finishes and its change becomes one commit on your version's branch" },
+    { name: "build", says: "a fresh copy gets installed, built and started on a free port" },
   ];
   if (fails) {
     for (let attempt = 1; attempt <= Math.min(tries, 3); attempt++) {
-      steps.push({ name: `fix ${attempt}`, says: `It didn't build. The agent is shown the error and tries again (try ${attempt}).` });
+      steps.push({ name: `fix ${attempt}`, says: `it didn't build, so the agent gets the error and tries again (try ${attempt})` });
     }
     if (tries > 3) {
       steps.push({
         name: "revert",
-        says: "Three tries and it still doesn't build, so the whole change is taken back out. Nobody else saw it.",
+        says: "three tries and it still doesn't build, so the whole change comes back out and nobody else ever saw it",
       });
       return steps;
     }
   }
-  steps.push({ name: "swap", says: "The new build answers the next page anyone loads. Open pages keep the copy that served them." });
+  steps.push({
+    name: "swap",
+    says: "the next page anyone loads comes from the new build, and pages already open keep the copy that served them",
+  });
   return steps;
 }
 
