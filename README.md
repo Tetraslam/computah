@@ -56,13 +56,14 @@ Open your app and press `Ctrl+.` (`⌘.` on a Mac).
 
 `<Computah>`:
 
-| prop       | default                 |                                             |
-| ---------- | ----------------------- | ------------------------------------------- |
-| `hotkey`   | `"mod+."`               | opens and closes the box                    |
-| `title`    | `"improvements"`        | the window's title                          |
-| `launcher` | `true`                  | show the small button that opens it         |
-| `endpoint` | `http://127.0.0.1:4821` | where the runner is                         |
-| `secret`   | none                    | bearer token, for a runner started with one |
+| prop          | default             |                                                                                                                                                      |
+| ------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hotkey`      | `"mod+."`           | opens and closes the box                                                                                                                             |
+| `title`       | `"improvements"`    | the window's title                                                                                                                                   |
+| `launcher`    | `true`              | show the small button that opens it                                                                                                                  |
+| `endpoint`    | found automatically | where the runner is. By default: the app's own address if the runner serves it, otherwise `http://127.0.0.1:4821` on a page opened from this machine |
+| `defaultOpen` | `false`             | start with the box open                                                                                                                              |
+| `secret`      | none                | bearer token, for a runner started with one                                                                                                          |
 
 `computah` (the development runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
 
@@ -145,8 +146,8 @@ In the app, one route passes the box's requests to the runner and says who is si
 import { createProxy } from "@tetraslam13/computah/next";
 
 export const { GET, POST } = createProxy({
-  runner: process.env.COMPUTAH_RUNNER,
-  secret: process.env.COMPUTAH_SECRET,
+  runner: process.env.COMPUTAH_RUNNER!,
+  secret: process.env.COMPUTAH_SECRET!,
   identify: async (request) => {
     const user = await yourAuth(request);
     return user && { id: user.id, name: user.email };
