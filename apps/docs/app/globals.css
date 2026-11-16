@@ -165,11 +165,11 @@ body {
   display: none;
 }
 /* Only where there's room for it beside the card. Narrower than this, the cards menu does the job. */
-@media (min-width: 1040px) {
+@media (min-width: 900px) {
   .desk.with-stack {
     display: grid;
-    grid-template-columns: 196px minmax(0, 720px);
-    gap: 28px;
+    grid-template-columns: 184px minmax(0, 720px);
+    gap: 24px;
     justify-content: center;
     align-items: start;
   }

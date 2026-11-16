@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { get, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -176,6 +176,31 @@ describe("a served app", () => {
     // Undo takes out the change and its fix together.
     expect((await post("olive", `/jobs/${job.id}/undo`)).status).toBe(200);
     expect(await page()).toBe("hello\n");
+  });
+
+  it("brings people's own versions up to date when the runner starts again after everyone's version moved", async () => {
+    await ask("mel", "from mel");
+    site.stop();
+    // A deploy while the runner is down: everyone's version gets a commit from outside.
+    const main = join(repo, ".computah/work/main");
+    writeFileSync(join(main, "deployed.txt"), "new\n");
+    execFileSync("git", ["add", "-A"], { cwd: main });
+    execFileSync("git", ["commit", "-qm", "deploy"], { cwd: main });
+    const again = new Site({
+      cwd: repo,
+      agent,
+      app: { build: "cp page.txt built.txt", start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: ["mel"] },
+    });
+    await again.init();
+    try {
+      const mine = join(repo, ".computah/work", slugFor({ id: "mel" }), "deployed.txt");
+      for (let i = 0; i < 200 && !existsSync(mine); i++) await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(readFileSync(mine, "utf8")).toBe("new\n");
+    } finally {
+      again.stop();
+    }
   });
 
   it("a change the agent can't make build never goes live and leaves the history clean", async () => {

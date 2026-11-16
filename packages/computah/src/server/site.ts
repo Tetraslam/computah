@@ -149,6 +149,8 @@ export class Site {
       this.own.set(id, version);
     }
     if (!this.push) await this.ensureRelease(this.main);
+    // Everyone's version may have moved while the runner was down (a deploy, say): bring people's own versions up to it.
+    void this.spread();
     this.reaper = setInterval(() => this.reap(), 30_000);
     this.reaper.unref();
   }
