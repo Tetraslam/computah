@@ -205,6 +205,7 @@ button { font: inherit; color: inherit; }
   text-underline-offset: 2px;
   cursor: pointer;
 }
+a.link { color: var(--ink); }
 .link:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
 
 .chip { display: inline-flex; align-items: center; height: 20px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); max-width: 190px; }

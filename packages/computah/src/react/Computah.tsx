@@ -273,18 +273,21 @@ export function Computah({
   const seen = useRef(new Map<string, string>());
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const pushed = box.info?.mode === "push";
   useEffect(() => {
-    if (!box.served) return;
+    if (!box.served && !pushed) return;
     for (const job of box.jobs) {
       const before = seen.current.get(job.id);
       seen.current.set(job.id, job.state);
       if (before === undefined || before === job.state) continue;
       const settled = job.state === "done" || job.state === "undone" || (job.state === "failed" && before === "working");
       if (!settled) continue;
+      // A version served at its own address is opened from its link, not by reloading this page.
+      if (pushed && job.version !== "main") continue;
       if (draftRef.current.trim()) setReady(true);
       else window.location.reload();
     }
-  }, [box.jobs, box.served]);
+  }, [box.jobs, box.served, pushed]);
   const working = box.jobs.some((job) => job.state === "working");
   useEffect(() => {
     if (!box.served || !working) return;
@@ -509,7 +512,15 @@ export function Computah({
                   </button>
                 </div>
               </form>
-              {box.served && box.info?.hasOwn && (
+              {pushed && box.info?.ownUrl && (
+                <p className="footer">
+                  you have a version of your own.
+                  <a className="link" href={box.info.ownUrl}>
+                    open it
+                  </a>
+                </p>
+              )}
+              {box.served && !pushed && box.info?.hasOwn && (
                 <p className="footer">
                   {box.info.version === "mine" ? "you're on your own version." : "you're on everyone's version."}
                   <button type="button" className="link" onClick={() => void box.view(box.info?.version === "mine" ? "main" : "mine")}>
@@ -558,7 +569,7 @@ function JobRow(props: {
       <div className="status">
         <span className="mark" aria-hidden="true" />
         <span className="status-text">{status}</span>
-        {job.version && job.version !== "main" && !live && <span className="quiet">yours</span>}
+        {job.version && job.version !== "main" && !live && !job.url && <span className="quiet">yours</span>}
         {live && now > 0 && <span className="quiet clock">{elapsed(job.startedAt ?? job.createdAt, now)}</span>}
       </div>
       <div className="actions">
@@ -571,6 +582,11 @@ function JobRow(props: {
           <button type="button" className="link" onClick={props.onStop}>
             stop
           </button>
+        )}
+        {job.state === "done" && job.url && (
+          <a className="link" href={job.url}>
+            open your version
+          </a>
         )}
         {job.state === "done" && (job.files?.length ?? 0) > 0 && (
           <button type="button" className="link" onClick={props.onUndo}>

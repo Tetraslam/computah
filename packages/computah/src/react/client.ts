@@ -32,6 +32,8 @@ export interface Info {
   live?: boolean;
   stale?: boolean;
   proposals?: { id: string; name: string; changes: string[] }[];
+  mode?: "swap" | "push";
+  ownUrl?: string;
 }
 
 /** Find the runner: the app's own address if the runner is serving it, otherwise this machine. */

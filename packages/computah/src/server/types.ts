@@ -43,6 +43,8 @@ export interface Job {
   /** Where the change is on its way to being served. Absent in development, where saving is releasing. */
   release?: "building" | "live" | "failed";
   releaseError?: string;
+  /** Where the change can be seen, when it's served at an address of its own. */
+  url?: string;
 }
 
 export type JobEventBody =

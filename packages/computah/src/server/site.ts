@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
 import { excludeLocally, repoRoot, run } from "./git.js";
+import type { Host } from "./hosts.js";
 import { type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
 import type { Agent, Job, JobContext } from "./types.js";
@@ -25,6 +26,22 @@ export interface SiteOptions {
   repairs?: number;
   /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
   lingerMs?: number;
+  /**
+   * How a change reaches people. Default: build it and swap it in on this machine, which also serves the app.
+   * With `push`, the runner pushes each change to a git remote and the app's host builds and serves it.
+   */
+  release?: { push: PushOptions };
+}
+
+export interface PushOptions {
+  /** Default "origin". */
+  remote?: string;
+  /** The branch the host serves to everyone. Default "main". */
+  branch?: string;
+  /** Who builds what is pushed. Without one, a change counts as live once the push lands. */
+  host?: Host;
+  /** Run `app.build` on the runner before pushing, to catch a broken build early. Default true when `app.build` is set. */
+  check?: boolean;
 }
 
 interface Release {
@@ -45,6 +62,8 @@ interface Version {
   /** A hot-reloading copy the person who asked watches while their change is made. */
   live?: { process: AppProcess; for: string; usedAt: number };
   usedAt: number;
+  /** Where the host serves this version, in push mode. */
+  url?: string;
   /** True when newer changes to everyone's version couldn't be merged in. */
   stale?: boolean;
 }
@@ -60,6 +79,10 @@ export interface Me {
   /** Whether they're on the hot-reloading copy right now. */
   live: boolean;
   stale: boolean;
+  /** "swap" when the runner serves the app itself, "push" when a host does. */
+  mode: "swap" | "push";
+  /** Where their own version is served, when a host serves it at an address of its own. */
+  ownUrl?: string;
   /** Other people's versions waiting for the owner, newest first. Owners only. */
   proposals: { id: string; name: string; changes: string[] }[];
 }
@@ -105,9 +128,14 @@ export class Site {
     for (const [id, person] of Object.entries(saved)) {
       if (await this.hasBranch(`computah/u/${id}`)) this.own.set(id, await this.open(id, person));
     }
-    await this.ensureRelease(this.main);
+    if (!this.push) await this.ensureRelease(this.main);
     this.reaper = setInterval(() => this.reap(), 30_000);
     this.reaper.unref();
+  }
+
+  /** True when a host serves the app and this runner only makes changes. */
+  get pushes(): boolean {
+    return !!this.push;
   }
 
   get repo() {
@@ -156,6 +184,7 @@ export class Site {
 
   /** The copy that should answer this person, starting one if needed. */
   async target(person: Person | null, wantsMain = false): Promise<{ port: number; live: boolean; copy: string }> {
+    if (this.push) throw new RequestError("This runner doesn't serve the app. Its host does.", 404);
     const version = this.versionFor(person, wantsMain);
     version.usedAt = Date.now();
     if (this.isLive(version, person) && version.live) {
@@ -199,6 +228,8 @@ export class Site {
       hasOwn: !!mine,
       live: this.isLive(version, person),
       stale: !!mine?.stale,
+      mode: this.push ? "push" : "swap",
+      ownUrl: mine?.url,
       proposals,
     };
   }
@@ -318,6 +349,7 @@ export class Site {
     if (version.release) await this.git(this.root, ["worktree", "remove", "--force", version.release.dir]).catch(() => "");
     await this.git(this.root, ["worktree", "remove", "--force", version.workDir]).catch(() => "");
     await this.git(this.root, ["branch", "-D", version.branch]).catch(() => "");
+    if (this.push) await this.git(this.root, ["push", this.push.remote ?? "origin", "--delete", version.branch]).catch(() => "");
     await this.savePeople();
   }
 
@@ -328,7 +360,7 @@ export class Site {
       try {
         await this.git(version.workDir, ["merge", "--no-edit", "--no-gpg-sign", MAIN]);
         version.stale = false;
-        if (version.release && !version.release.process.exited) void this.release(version).catch(() => {});
+        if (this.push ? !!version.url : version.release && !version.release.process.exited) void this.release(version).catch(() => {});
       } catch {
         await this.git(version.workDir, ["merge", "--abort"]).catch(() => "");
         version.stale = true;
@@ -374,7 +406,8 @@ export class Site {
   /** While a change is being made, run a hot-reloading copy for the person who asked. */
   private async startLive(version: Version, job: Job) {
     const { app } = this.options;
-    if (!app.dev || !job.by) return;
+    // A live copy is reached through the runner's front door, which push mode doesn't have.
+    if (!app.dev || !job.by || this.push) return;
     if (version.live && !version.live.process.exited) {
       version.live.for = job.by.id;
       version.live.usedAt = Date.now();
@@ -409,6 +442,7 @@ export class Site {
       await version.lane.noteRelease(job.id, "failed", firstLine(error));
       return error instanceof Error ? error.message : String(error);
     }
+    job.url = version === this.main ? undefined : version.url;
     await version.lane.noteRelease(job.id, "live");
     if (version === this.main) void this.spread();
     return null;
@@ -431,7 +465,41 @@ export class Site {
     return building;
   }
 
+  private get push(): PushOptions | undefined {
+    return this.options.release?.push;
+  }
+
+  /** Push mode: check the build here if asked, push the branch, and wait for the host to serve it. */
+  private async pushOut(version: Version, push: PushOptions) {
+    const { app } = this.options;
+    const remote = push.remote ?? "origin";
+    const production = version === this.main;
+    const target = production ? (push.branch ?? "main") : version.branch;
+    if ((push.check ?? true) && app.build) {
+      await this.install(version.workDir);
+      await runStep(app.build, appDir(version.workDir, app), app.env);
+    }
+    const send = () => this.git(version.workDir, ["push", remote, `HEAD:refs/heads/${target}`]);
+    try {
+      await send();
+    } catch {
+      // Someone else pushed in the meantime: take their work in, then try once more.
+      await this.git(version.workDir, ["fetch", remote, target]);
+      try {
+        await this.git(version.workDir, ["merge", "--no-edit", "--no-gpg-sign", "FETCH_HEAD"]);
+      } catch {
+        await this.git(version.workDir, ["merge", "--abort"]).catch(() => "");
+        throw new AppError("The change conflicts with newer work on the remote.");
+      }
+      await send();
+    }
+    const sha = await this.head(version);
+    const result = await push.host?.deployed({ sha, branch: target, production });
+    version.url = result?.url ?? version.url;
+  }
+
   private async build(version: Version) {
+    if (this.push) return this.pushOut(version, this.push);
     const { app } = this.options;
     const sha = await this.head(version);
     if (version.release?.sha === sha && !version.release.process.exited) return;

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
 /** Who is asking. `id` must be stable and unforgeable by the visitor. */
@@ -36,6 +37,25 @@ export function header(idHeader: string, nameHeader?: string): Identity {
     if (typeof id !== "string" || !id.trim()) return null;
     const name = nameHeader ? request.headers[nameHeader.toLowerCase()] : undefined;
     return { id: id.trim(), name: typeof name === "string" && name.trim() ? name.trim() : undefined };
+  };
+}
+
+/**
+ * Take the person from the app's own server, which forwards the box's requests to the runner
+ * with a shared secret and says who is signed in. Use with `createProxy` from "computah/next".
+ */
+export function gateway(secret: string): Identity {
+  const wanted = Buffer.from(`Bearer ${secret}`);
+  return (request) => {
+    const given = Buffer.from(request.headers.authorization ?? "");
+    if (!secret || given.length !== wanted.length || !timingSafeEqual(given, wanted)) return null;
+    const id = request.headers["x-computah-user-id"];
+    if (typeof id !== "string" || !id.trim()) return null;
+    const name = request.headers["x-computah-user-name"];
+    return {
+      id: decodeURIComponent(id.trim()),
+      name: typeof name === "string" && name.trim() ? decodeURIComponent(name.trim()) : undefined,
+    };
   };
 }
 

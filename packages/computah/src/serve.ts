@@ -7,7 +7,7 @@ import { type AgentName, agents } from "./server/agents.js";
 import type { AppCommands } from "./server/app.js";
 import { createFrontServer } from "./server/front.js";
 import { exe, type Identity, local, type Trust } from "./server/identity.js";
-import { Site } from "./server/site.js";
+import { type PushOptions, Site } from "./server/site.js";
 import type { Agent } from "./server/types.js";
 
 /** The shape of `computah.config.mjs`'s default export. */
@@ -25,6 +25,10 @@ export interface Config {
   host?: string;
   idleMs?: number;
   agentEnv?: NodeJS.ProcessEnv;
+  /** How a change reaches people. Leave out to build and serve on this machine. */
+  release?: { push: PushOptions };
+  /** How many times the agent may try to fix a change that doesn't build. Default 3. */
+  repairs?: number;
 }
 
 export async function serveSite(argv: string[]): Promise<never> {
@@ -33,7 +37,8 @@ export async function serveSite(argv: string[]): Promise<never> {
   const path = resolve(cwd, values.config ?? "computah.config.mjs");
   if (!existsSync(path)) fail(`No config at ${path}. See the README for an example.`);
   const config = ((await import(pathToFileURL(path).href)) as { default?: Config }).default;
-  if (!config?.app?.start || !config.trust?.owners?.length) fail("The config needs at least `app.start` and `trust.owners`.");
+  if (!config?.trust?.owners?.length) fail("The config needs `trust.owners`.");
+  if (!config.release?.push && !config.app?.start) fail("The config needs `app.start`, or `release.push` if a host serves the app.");
 
   const installed = (command: string) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
   const name = typeof config.agent === "string" ? config.agent : (["claude", "opencode", "codex"] as const).find(installed);
@@ -43,10 +48,20 @@ export async function serveSite(argv: string[]): Promise<never> {
   const identity = config.identity === "exe" ? exe() : config.identity === "local" ? local() : config.identity;
   if (typeof identity !== "function") fail('`identity` must be "exe", "local" or a function.');
 
-  const site = new Site({ cwd, agent, app: config.app, identity, trust: config.trust, idleMs: config.idleMs, agentEnv: config.agentEnv });
+  const site = new Site({
+    cwd,
+    agent,
+    app: config.app ?? { start: "" },
+    identity,
+    trust: config.trust,
+    idleMs: config.idleMs,
+    agentEnv: config.agentEnv,
+    release: config.release,
+    repairs: config.repairs,
+  });
   const port = Number(values.port ?? config.port ?? 8000);
   const host = config.host ?? "0.0.0.0";
-  console.log("computah: building the app…");
+  console.log(config.release?.push ? "computah: starting…" : "computah: building the app…");
   try {
     await site.init();
   } catch (error) {

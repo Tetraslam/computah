@@ -96,6 +96,7 @@ export function createFrontServer(site: Site): Server {
       person = await site.identify(request);
       const path = new URL(request.url ?? "/", "http://front").pathname;
       if (path === PREFIX || path.startsWith(`${PREFIX}/`)) return await api(site, person, path.slice(PREFIX.length), request, response);
+      if (site.pushes) return send(response, 404, { error: "Not found." });
       const { port, local, setCookie } = await route(site, person, request);
       proxyRequest(request, response, port, { setCookie, local });
     } catch (error) {
