@@ -436,11 +436,7 @@ export class Site {
       limitsNote: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberNote : undefined),
       check: (job, files) => (this.level(job.by ?? null) === "member" ? (this.options.trust.memberCheck?.(files) ?? null) : null),
       onStart: (job) => void this.startLive(version, job),
-      sandbox: (job) => {
-        const rule = this.options.sandbox;
-        if (!rule) return undefined;
-        return rule.for === "everyone" || this.level(job.by ?? null) === "member" ? rule.in : undefined;
-      },
+      sandbox: (job) => this.sandboxFor(job),
       verify: (job) => this.afterChange(version, job),
       repairs: this.options.repairs,
       // In push mode the failed commits already reached the remote, so their reverts must follow them.
@@ -455,11 +451,18 @@ export class Site {
     return version;
   }
 
+  private sandboxFor(job: Job): Sandbox | undefined {
+    const rule = this.options.sandbox;
+    if (!rule) return undefined;
+    return rule.for === "everyone" || this.level(job.by ?? null) === "member" ? rule.in : undefined;
+  }
+
   /** While a change is being made, run a hot-reloading copy for the person who asked. */
   private async startLive(version: Version, job: Job) {
     const { app } = this.options;
     // A live copy is reached through the runner's front door, which push mode doesn't have.
-    if (!app.dev || !job.by || this.push) return;
+    // A sandboxed agent's changes arrive all at once at the end, so there is nothing to watch live.
+    if (!app.dev || !job.by || this.push || this.sandboxFor(job)) return;
     if (version.live && !version.live.process.exited) {
       version.live.for = job.by.id;
       version.live.usedAt = Date.now();
