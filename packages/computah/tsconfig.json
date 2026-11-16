@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "dist",
-    
+
     "types": ["node"]
   },
   "include": ["src", "test"],

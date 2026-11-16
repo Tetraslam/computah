@@ -11,8 +11,8 @@ export const STYLES = /* css */ `
   --paper: #fff;
   --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
   --words: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --checker: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E\") 0 0 / 2px 2px;
-  --sparse: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3C/svg%3E\") 0 0 / 2px 2px;
+  --checker: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
+  --sparse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
   --stripes: repeating-linear-gradient(var(--ink) 0 1px, var(--paper) 1px 2px);
   font: 12px/1.35 var(--ui);
   color: var(--ink);
@@ -80,6 +80,7 @@ export const STYLES = /* css */ `
 .jobs {
   flex: 0 1 auto;
   min-height: 0;
+  max-height: 244px;
   margin: 0;
   padding: 0;
   list-style: none;

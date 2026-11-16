@@ -6,10 +6,21 @@ export interface JobContext {
   /** Text the user had selected on the page. */
   selection?: string;
   /** An element the user pointed at. */
-  element?: { selector: string; text?: string; html?: string; component?: string };
+  element?: {
+    selector: string;
+    text?: string;
+    html?: string;
+    component?: string;
+  };
 }
 
-export type JobState = "queued" | "working" | "done" | "failed" | "cancelled" | "undone";
+export type JobState =
+  | "queued"
+  | "working"
+  | "done"
+  | "failed"
+  | "cancelled"
+  | "undone";
 
 export interface Job {
   id: string;

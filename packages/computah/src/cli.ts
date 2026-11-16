@@ -43,10 +43,18 @@ if (values.help) {
   process.exit(0);
 }
 
-const installed = (command: string) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
-const name = (values.agent ?? (["claude", "opencode", "codex"] as const).find(installed)) as AgentName | undefined;
+const installed = (command: string) =>
+  spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
+const name = (values.agent ??
+  (["claude", "opencode", "codex"] as const).find(installed)) as
+  | AgentName
+  | undefined;
 if (!name || !(name in agents)) {
-  console.error(values.agent ? `Unknown agent "${values.agent}". Use claude, opencode or codex.` : "No coding agent found. Install Claude Code, OpenCode or Codex.");
+  console.error(
+    values.agent
+      ? `Unknown agent "${values.agent}". Use claude, opencode or codex.`
+      : "No coding agent found. Install Claude Code, OpenCode or Codex.",
+  );
   process.exit(1);
 }
 
@@ -60,7 +68,12 @@ const host = values.host ?? "127.0.0.1";
 
 try {
   await computah.init();
-  await serve(computah, { port, host, secret: values.secret ?? process.env.COMPUTAH_SECRET, origins: values.origin });
+  await serve(computah, {
+    port,
+    host,
+    secret: values.secret ?? process.env.COMPUTAH_SECRET,
+    origins: values.origin,
+  });
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;
   console.error(
@@ -70,14 +83,20 @@ try {
   );
   process.exit(1);
 }
-console.log(`computah: ${name} will make changes in ${computah.repo} (http://${host}:${port})`);
+console.log(
+  `computah: ${name} will make changes in ${computah.repo} (http://${host}:${port})`,
+);
 
 if (alongside.length) {
-  const child = spawn(alongside[0] as string, alongside.slice(1), { stdio: "inherit", shell: false });
+  const child = spawn(alongside[0] as string, alongside.slice(1), {
+    stdio: "inherit",
+    shell: false,
+  });
   child.on("exit", (code) => process.exit(code ?? 0));
   child.on("error", () => {
     console.error(`computah: couldn't run ${alongside[0]}`);
     process.exit(1);
   });
-  for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
+  for (const signal of ["SIGINT", "SIGTERM"] as const)
+    process.on(signal, () => child.kill(signal));
 }

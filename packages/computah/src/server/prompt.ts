@@ -1,18 +1,24 @@
 import type { JobContext } from "./types.js";
 
-const clip = (text: string, limit: number) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
+const clip = (text: string, limit: number) =>
+  text.length > limit ? `${text.slice(0, limit)}…` : text;
 
 /** The instructions an agent gets for one request from the box. */
 export function buildPrompt(text: string, context: JobContext): string {
   const where: string[] = [];
   if (context.url) where.push(`- Page they were on: ${clip(context.url, 500)}`);
   if (context.title) where.push(`- Page title: ${clip(context.title, 200)}`);
-  if (context.viewport) where.push(`- Window size: ${context.viewport.width}×${context.viewport.height}`);
-  if (context.selection) where.push(`- Text they had selected: "${clip(context.selection, 1000)}"`);
+  if (context.viewport)
+    where.push(
+      `- Window size: ${context.viewport.width}×${context.viewport.height}`,
+    );
+  if (context.selection)
+    where.push(`- Text they had selected: "${clip(context.selection, 1000)}"`);
   if (context.element) {
     const element = context.element;
     where.push(`- Element they pointed at: ${clip(element.selector, 300)}`);
-    if (element.component) where.push(`  - React component: ${clip(element.component, 200)}`);
+    if (element.component)
+      where.push(`  - React component: ${clip(element.component, 200)}`);
     if (element.text) where.push(`  - Its text: "${clip(element.text, 300)}"`);
     if (element.html) where.push(`  - Its HTML: ${clip(element.html, 1200)}`);
   }
@@ -34,6 +40,6 @@ export function buildPrompt(text: string, context: JobContext): string {
     "- If the repo has a fast type check or lint command, run it on what you changed and fix what you broke.",
     "- If you can't or shouldn't do what was asked, change nothing and say why.",
     "",
-    "When you're done, reply with one or two plain sentences for the person who asked: what changed, in terms of what they'll see. No file names, no code, no headings.",
+    "When you're done, reply with one or two plain sentences for the person who asked: what changed, in terms of what they'll see. No file names, no code, no headings, and nothing about checks you ran unless one is still failing.",
   ].join("\n");
 }

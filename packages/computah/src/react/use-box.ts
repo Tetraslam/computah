@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activityLabel, type ClientOptions, createClient, type Job, type JobEvent, pageContext, RunnerError } from "./client.js";
+import {
+  activityLabel,
+  type ClientOptions,
+  createClient,
+  type Job,
+  type JobEvent,
+  pageContext,
+  RunnerError,
+} from "./client.js";
 
 export type Connection = "connecting" | "ready" | "offline" | "refused";
 
@@ -16,7 +24,10 @@ const RETRY_MS = 3000;
 /** Everything the box knows: the runner's state, the requests, and the actions on them. */
 export function useBox(options: ClientOptions & { active: boolean }) {
   const { endpoint, secret, active } = options;
-  const client = useMemo(() => createClient({ endpoint, secret }), [endpoint, secret]);
+  const client = useMemo(
+    () => createClient({ endpoint, secret }),
+    [endpoint, secret],
+  );
   const [connection, setConnection] = useState<Connection>("connecting");
   const [refusal, setRefusal] = useState("");
   const [agent, setAgent] = useState("");
@@ -26,7 +37,9 @@ export function useBox(options: ClientOptions & { active: boolean }) {
   const following = useRef(new Map<string, AbortController>());
 
   const patch = useCallback((id: string, change: (job: BoxJob) => BoxJob) => {
-    setJobs((current) => current.map((job) => (job.id === id ? change(job) : job)));
+    setJobs((current) =>
+      current.map((job) => (job.id === id ? change(job) : job)),
+    );
   }, []);
 
   const follow = useCallback(
@@ -65,7 +78,11 @@ export function useBox(options: ClientOptions & { active: boolean }) {
       setConnection("ready");
       setJobs((current) => {
         const known = new Map(current.map((job) => [job.id, job]));
-        return list.map((job) => ({ ...job, steps: known.get(job.id)?.steps ?? [], activity: known.get(job.id)?.activity }));
+        return list.map((job) => ({
+          ...job,
+          steps: known.get(job.id)?.steps ?? [],
+          activity: known.get(job.id)?.activity,
+        }));
       });
       for (const job of list) if (isLive(job)) follow(job.id);
     } catch (error) {
@@ -94,16 +111,23 @@ export function useBox(options: ClientOptions & { active: boolean }) {
     };
   }, []);
 
-  const guard = useCallback(async <T>(action: () => Promise<T>): Promise<T | undefined> => {
-    setProblem("");
-    try {
-      return await action();
-    } catch (error) {
-      if (error instanceof RunnerError && error.offline) setConnection("offline");
-      else setProblem(error instanceof Error ? error.message : "Something went wrong.");
-      return undefined;
-    }
-  }, []);
+  const guard = useCallback(
+    async <T>(action: () => Promise<T>): Promise<T | undefined> => {
+      setProblem("");
+      try {
+        return await action();
+      } catch (error) {
+        if (error instanceof RunnerError && error.offline)
+          setConnection("offline");
+        else
+          setProblem(
+            error instanceof Error ? error.message : "Something went wrong.",
+          );
+        return undefined;
+      }
+    },
+    [],
+  );
 
   const submit = useCallback(
     async (text: string, element?: Element | null): Promise<boolean> => {
@@ -111,14 +135,20 @@ export function useBox(options: ClientOptions & { active: boolean }) {
       const job = await guard(() => client.submit(text, pageContext(element)));
       setSending(false);
       if (!job) return false;
-      setJobs((current) => [{ ...job, steps: [], activity: activityLabel(undefined) }, ...current]);
+      setJobs((current) => [
+        { ...job, steps: [], activity: activityLabel(undefined) },
+        ...current,
+      ]);
       follow(job.id);
       return true;
     },
     [client, follow, guard],
   );
 
-  const cancel = useCallback((id: string) => guard(() => client.cancel(id)), [client, guard]);
+  const cancel = useCallback(
+    (id: string) => guard(() => client.cancel(id)),
+    [client, guard],
+  );
   const undo = useCallback(
     async (id: string) => {
       const job = await guard(() => client.undo(id));
@@ -127,5 +157,16 @@ export function useBox(options: ClientOptions & { active: boolean }) {
     [client, guard, patch],
   );
 
-  return { connection, refusal, agent, jobs, sending, problem, submit, cancel, undo, dismissProblem: () => setProblem("") };
+  return {
+    connection,
+    refusal,
+    agent,
+    jobs,
+    sending,
+    problem,
+    submit,
+    cancel,
+    undo,
+    dismissProblem: () => setProblem(""),
+  };
 }

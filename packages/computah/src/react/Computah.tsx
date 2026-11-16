@@ -1,8 +1,21 @@
 "use client";
 
-import { type CSSProperties, type KeyboardEvent, type PointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import { type ClientOptions, describeElement, type JobEvent } from "./client.js";
+import {
+  type ClientOptions,
+  describeElement,
+  type JobEvent,
+} from "./client.js";
 import { STYLES } from "./styles.js";
 import { type BoxJob, useBox } from "./use-box.js";
 
@@ -40,9 +53,21 @@ const save = (change: Saved) => {
   }
 };
 
-const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+const isMac = () =>
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad/.test(navigator.platform);
 
-export function matchesHotkey(event: { key: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }, hotkey: string, mac: boolean) {
+export function matchesHotkey(
+  event: {
+    key: string;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+    altKey: boolean;
+  },
+  hotkey: string,
+  mac: boolean,
+) {
   const parts = hotkey.toLowerCase().split("+");
   const key = parts.pop();
   const wantMeta = parts.includes("meta") || (parts.includes("mod") && mac);
@@ -74,27 +99,42 @@ export function hotkeyLabel(hotkey: string, mac: boolean) {
 /** The first paragraph of the agent's closing words, without code formatting. */
 export function plainSummary(text: string | undefined) {
   const first = (text ?? "").trim().split(/\n\s*\n/)[0] ?? "";
-  return first.replace(/`([^`]*)`/g, "$1").replace(/\s+/g, " ").trim();
+  return first
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function elapsed(from: number | undefined, to: number) {
   const seconds = Math.max(0, Math.round((to - (from ?? to)) / 1000));
-  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
 function stepLine(step: JobEvent): string | null {
-  if (step.type === "tool") return step.detail ? `${step.name}  ${step.detail}` : step.name;
+  if (step.type === "tool")
+    return step.detail ? `${step.name}  ${step.detail}` : step.name;
   if (step.type === "text") return plainSummary(step.text);
   if (step.type === "error") return step.message;
   return null;
 }
 
 /** The improvements box. Put one anywhere in your app. */
-export function Computah({ hotkey = "mod+.", title = "improvements", launcher = true, defaultOpen = false, endpoint, secret }: ComputahProps) {
+export function Computah({
+  hotkey = "mod+.",
+  title = "improvements",
+  launcher = true,
+  defaultOpen = false,
+  endpoint,
+  secret,
+}: ComputahProps) {
   const [root, setRoot] = useState<ShadowRoot | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Element | null>(null);
   const [hover, setHover] = useState<DOMRect | null>(null);
@@ -106,7 +146,9 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
   const windowRef = useRef<HTMLElement>(null);
   const returnFocus = useRef<Element | null>(null);
   const box = useBox({ endpoint, secret, active: open });
-  const live = box.jobs.some((job) => job.state === "queued" || job.state === "working");
+  const live = box.jobs.some(
+    (job) => job.state === "queued" || job.state === "working",
+  );
 
   // Mount a shadow root on the body, so the host app's styles and ours never meet.
   useEffect(() => {
@@ -118,7 +160,8 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
     setMac(isMac());
     setOpen(saved.open ?? defaultOpen);
     setDraft(saved.draft ?? "");
-    if (saved.x !== undefined && saved.y !== undefined) setPosition({ x: saved.x, y: saved.y });
+    if (saved.x !== undefined && saved.y !== undefined)
+      setPosition({ x: saved.x, y: saved.y });
     setRoot(shadow);
     return () => host.remove();
   }, [defaultOpen]);
@@ -160,20 +203,37 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
     }
     if (zoomed.current) return;
     zoomed.current = true;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof element.animate !== "function") return;
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      typeof element.animate !== "function"
+    )
+      return;
     const to = element.getBoundingClientRect();
-    const from = { left: window.innerWidth - 46, top: window.innerHeight - 38, width: 30, height: 22 };
+    const from = {
+      left: window.innerWidth - 46,
+      top: window.innerHeight - 38,
+      width: 30,
+      height: 22,
+    };
     const outline = document.createElement("div");
     outline.className = "zoom";
     root.appendChild(outline);
     element.setAttribute("data-zooming", "");
-    const frame = (rect: { left: number; top: number; width: number; height: number }) => ({
+    const frame = (rect: {
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+    }) => ({
       left: `${rect.left}px`,
       top: `${rect.top}px`,
       width: `${rect.width}px`,
       height: `${rect.height}px`,
     });
-    const animation = outline.animate([frame(from), frame(to)], { duration: 160, easing: "steps(4, jump-none)" });
+    const animation = outline.animate([frame(from), frame(to)], {
+      duration: 160,
+      easing: "steps(4, jump-none)",
+    });
     const finish = () => {
       outline.remove();
       element.removeAttribute("data-zooming");
@@ -184,6 +244,7 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
   }, [open, root]);
 
   // Grow the field with its text, up to a limit, without moving the window's bottom edge.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the height is re-measured whenever the text or visibility changes.
   useLayoutEffect(() => {
     const element = field.current;
     if (!element) return;
@@ -202,8 +263,11 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
   useEffect(() => {
     if (!picking) return;
     const under = (event: MouseEvent) =>
-      document.elementsFromPoint(event.clientX, event.clientY).find((element) => !element.hasAttribute("data-computah")) ?? null;
-    const move = (event: MouseEvent) => setHover(under(event)?.getBoundingClientRect() ?? null);
+      document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find((element) => !element.hasAttribute("data-computah")) ?? null;
+    const move = (event: MouseEvent) =>
+      setHover(under(event)?.getBoundingClientRect() ?? null);
     const click = (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
@@ -237,7 +301,11 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
   };
 
   const onFieldKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing
+    ) {
       event.preventDefault();
       void send();
     }
@@ -252,10 +320,19 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
     const element = windowRef.current;
     if (!element) return;
     const rect = element.getBoundingClientRect();
-    const offset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const offset = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
     const move = (moved: globalThis.PointerEvent) => {
-      const x = Math.min(Math.max(0, moved.clientX - offset.x), window.innerWidth - rect.width);
-      const y = Math.min(Math.max(0, moved.clientY - offset.y), window.innerHeight - 24);
+      const x = Math.min(
+        Math.max(0, moved.clientX - offset.x),
+        window.innerWidth - rect.width,
+      );
+      const y = Math.min(
+        Math.max(0, moved.clientY - offset.y),
+        window.innerHeight - 24,
+      );
       setPosition({ x, y });
       save({ x, y });
     };
@@ -270,28 +347,61 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
 
   if (!root) return null;
 
-  const pickedLabel = picked ? (describeElement(picked).text?.slice(0, 28) ?? picked.tagName.toLowerCase()) : "";
-  const style: CSSProperties | undefined = position ? { left: position.x, top: position.y, bottom: "auto", transform: "none" } : undefined;
+  const pickedLabel = picked
+    ? (describeElement(picked).text?.slice(0, 28) ??
+      picked.tagName.toLowerCase())
+    : "";
+  const style: CSSProperties | undefined = position
+    ? { left: position.x, top: position.y, bottom: "auto", transform: "none" }
+    : undefined;
   const keys = hotkeyLabel(hotkey, mac);
 
   return createPortal(
     <>
       <style>{STYLES}</style>
       {launcher && !open && (
-        <button type="button" className="launcher" onClick={show} aria-label={`Open ${title} (${keys})`} title={`${title}  ${keys}`}>
+        <button
+          type="button"
+          className="launcher"
+          onClick={show}
+          aria-label={`Open ${title} (${keys})`}
+          title={`${title}  ${keys}`}
+        >
           <span className="launcher-mark" aria-hidden="true" />
         </button>
       )}
       {picking && (
         <div className="pick" aria-hidden="true">
-          {hover && <div className="pick-frame" style={{ left: hover.left, top: hover.top, width: hover.width, height: hover.height }} />}
+          {hover && (
+            <div
+              className="pick-frame"
+              style={{
+                left: hover.left,
+                top: hover.top,
+                width: hover.width,
+                height: hover.height,
+              }}
+            />
+          )}
           <div className="pick-hint">click what you mean · esc to cancel</div>
         </div>
       )}
       {open && (
-        <section ref={windowRef} className="window" data-picking={picking || undefined} role="dialog" aria-label={title} style={style}>
+        <section
+          ref={windowRef}
+          className="window"
+          data-picking={picking || undefined}
+          role="dialog"
+          aria-label={title}
+          style={style}
+        >
           <header className="titlebar" onPointerDown={drag}>
-            <button type="button" className="closebox" onClick={hide} aria-label="Close" />
+            <button
+              type="button"
+              className="closebox"
+              onClick={hide}
+              aria-label="Close"
+            />
             <span className="title">{title}</span>
           </header>
 
@@ -320,7 +430,9 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
                       job={job}
                       now={now}
                       expanded={expanded === job.id}
-                      onToggle={() => setExpanded(expanded === job.id ? null : job.id)}
+                      onToggle={() =>
+                        setExpanded(expanded === job.id ? null : job.id)
+                      }
                       onStop={() => void box.cancel(job.id)}
                       onUndo={() => void box.undo(job.id)}
                       onRetry={() => {
@@ -334,7 +446,11 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
               {box.problem && (
                 <p className="problem" role="alert">
                   {box.problem}
-                  <button type="button" className="link" onClick={box.dismissProblem}>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={box.dismissProblem}
+                  >
                     ok
                   </button>
                 </p>
@@ -351,7 +467,11 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
                   className="field"
                   rows={1}
                   value={draft}
-                  placeholder={box.jobs.length ? "what else should change?" : "what should change?"}
+                  placeholder={
+                    box.jobs.length
+                      ? "what else should change?"
+                      : "what should change?"
+                  }
                   aria-label="What should change?"
                   onChange={(event) => {
                     setDraft(event.target.value);
@@ -363,18 +483,35 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
                   {picked ? (
                     <span className="chip">
                       <span className="chip-text">about “{pickedLabel}”</span>
-                      <button type="button" className="chip-x" onClick={() => setPicked(null)} aria-label="Forget the element">
+                      <button
+                        type="button"
+                        className="chip-x"
+                        onClick={() => setPicked(null)}
+                        aria-label="Forget the element"
+                      >
                         ×
                       </button>
                     </span>
                   ) : (
-                    <button type="button" className="plain" onClick={() => setPicking(true)}>
+                    <button
+                      type="button"
+                      className="plain"
+                      onClick={() => setPicking(true)}
+                    >
                       point at it
                     </button>
                   )}
                   <span className="spacer" />
-                  <span className="quiet agent">{box.connection === "ready" ? box.agent : "connecting"}</span>
-                  <button type="submit" className="default" disabled={!draft.trim() || box.sending || box.connection !== "ready"}>
+                  <span className="quiet agent">
+                    {box.connection === "ready" ? box.agent : "connecting"}
+                  </span>
+                  <button
+                    type="submit"
+                    className="default"
+                    disabled={
+                      !draft.trim() || box.sending || box.connection !== "ready"
+                    }
+                  >
                     Send
                   </button>
                 </div>
@@ -388,10 +525,20 @@ export function Computah({ hotkey = "mod+.", title = "improvements", launcher = 
   );
 }
 
-function JobRow(props: { job: BoxJob; now: number; expanded: boolean; onToggle: () => void; onStop: () => void; onUndo: () => void; onRetry: () => void }) {
+function JobRow(props: {
+  job: BoxJob;
+  now: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onStop: () => void;
+  onUndo: () => void;
+  onRetry: () => void;
+}) {
   const { job, now } = props;
   const live = job.state === "queued" || job.state === "working";
-  const lines = job.steps.map(stepLine).filter((line): line is string => Boolean(line));
+  const lines = job.steps
+    .map(stepLine)
+    .filter((line): line is string => Boolean(line));
   const status =
     job.state === "queued"
       ? "waiting its turn"
@@ -411,12 +558,23 @@ function JobRow(props: { job: BoxJob; now: number; expanded: boolean; onToggle: 
       <div className="status">
         <span className="mark" aria-hidden="true" />
         <span className="status-text">{status}</span>
-        {live && now > 0 && <span className="quiet clock">{elapsed(job.startedAt ?? job.createdAt, now)}</span>}
+        {live && now > 0 && (
+          <span className="quiet clock">
+            {elapsed(job.startedAt ?? job.createdAt, now)}
+          </span>
+        )}
       </div>
       <div className="actions">
         {lines.length > 0 && (
-          <button type="button" className="link" onClick={props.onToggle} aria-expanded={props.expanded}>
-            {props.expanded ? "hide steps" : `${lines.length} ${lines.length === 1 ? "step" : "steps"}`}
+          <button
+            type="button"
+            className="link"
+            onClick={props.onToggle}
+            aria-expanded={props.expanded}
+          >
+            {props.expanded
+              ? "hide steps"
+              : `${lines.length} ${lines.length === 1 ? "step" : "steps"}`}
           </button>
         )}
         {live && (
@@ -429,7 +587,9 @@ function JobRow(props: { job: BoxJob; now: number; expanded: boolean; onToggle: 
             undo
           </button>
         )}
-        {(job.state === "failed" || job.state === "cancelled" || job.state === "undone") && (
+        {(job.state === "failed" ||
+          job.state === "cancelled" ||
+          job.state === "undone") && (
           <button type="button" className="link" onClick={props.onRetry}>
             ask again
           </button>
