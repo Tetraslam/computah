@@ -78,3 +78,30 @@ export function buildRepairPrompt(text: string, problem: string): string {
     "When you're done, reply with one or two plain sentences for the person who asked: what they'll see now. No file names, no code.",
   ].join("\n");
 }
+
+/** The instructions an agent gets when two sets of changes to the app collide. */
+export function buildMergePrompt(files: string[], theirs: string[], limits: Limits = {}): string {
+  return [
+    "This app has a shared version that everyone uses, and one person has a version of their own with changes they asked for. The shared version has moved on, and bringing its latest changes into this person's version hit conflicts. You are in this person's checkout, in the middle of that git merge.",
+    "",
+    "Files with conflicts:",
+    ...files.map((file) => `- ${file}`),
+    "",
+    ...(theirs.length
+      ? [
+          "What this person asked for, oldest first. These are the intentions to keep:",
+          ...theirs.map((text) => `- ${clip(text.replace(/\s+/g, " "), 400)}`),
+          "",
+        ]
+      : []),
+    "In each file, the part between `<<<<<<<` and `=======` is this person's version, and the part between `=======` and `>>>>>>>` is the shared version.",
+    "",
+    "Resolve every conflict so the file keeps BOTH: what the shared version changed, and what this person asked for. Their requests still have to be true of the result. If the two genuinely can't both hold, keep the shared version's structure and redo this person's change on top of it.",
+    "- Edit only the files listed above. Leave no conflict markers behind.",
+    "- Don't run git add, git commit, git merge or any other command that changes git state. The merge is finished for you afterwards.",
+    "- Don't start, stop or restart servers.",
+    ...(limits.note ? [`- These files have rules: ${limits.note}`] : []),
+    "",
+    "When you're done, reply with one plain sentence for this person about what happened to their changes. No file names, no code.",
+  ].join("\n");
+}

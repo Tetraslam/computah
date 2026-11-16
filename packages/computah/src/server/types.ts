@@ -36,6 +36,8 @@ export interface Job {
   commit?: string;
   /** Every commit the job made, oldest first: the change, then any fixes to make it build. */
   commits?: string[];
+  /** True for work the runner started itself, such as catching a version up. Nobody typed it. */
+  chore?: boolean;
   /** Who asked, when the runner knows. */
   by?: { id: string; name?: string };
   /** Which version of the app this changes: "main" for everyone's, or a person's own. */

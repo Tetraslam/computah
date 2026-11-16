@@ -63,6 +63,13 @@ export interface ChangedFile {
   content: string | null;
 }
 
+/** What a chore gets to work with. `ask` runs the agent on a prompt in this checkout. */
+export type Chore = (tools: {
+  job: Job;
+  ask: (prompt: string) => Promise<{ summary: string; failed?: string }>;
+  cancelled: () => boolean;
+}) => Promise<string>;
+
 export class RequestError extends Error {
   constructor(
     message: string,
@@ -86,6 +93,7 @@ export class Computah {
   private events = new Map<string, JobEvent[]>();
   private listeners = new Map<string, Set<Listener>>();
   private queue: string[] = [];
+  private chores = new Map<string, Chore>();
   private current: {
     id: string;
     child: ChildProcess | null;
@@ -171,6 +179,33 @@ export class Computah {
     };
     this.jobs.set(job.id, job);
     this.events.set(job.id, []);
+    await this.save(job);
+    await this.emit(job.id, { type: "state", state: "queued" });
+    this.queue.push(job.id);
+    void this.drain();
+    return job;
+  }
+
+  /**
+   * Queue a chore: work the runner itself needs done in this checkout, such as bringing in someone
+   * else's changes. It waits its turn behind requests, can use the agent, and shows up in the box.
+   * Throw from it to fail it; what it returns is its summary.
+   */
+  async chore(text: string, extra: Pick<Job, "by" | "version">, chore: Chore): Promise<Job> {
+    await this.init();
+    const job: Job = {
+      id: `${Date.now().toString(36)}${randomBytes(4).toString("hex")}`,
+      text,
+      context: {},
+      state: "queued",
+      agent: this.agentName,
+      createdAt: Date.now(),
+      chore: true,
+      ...extra,
+    };
+    this.jobs.set(job.id, job);
+    this.events.set(job.id, []);
+    this.chores.set(job.id, chore);
     await this.save(job);
     await this.emit(job.id, { type: "state", state: "queued" });
     this.queue.push(job.id);
@@ -275,7 +310,10 @@ export class Computah {
     if (!job) return void this.drain();
     this.current = { id, child: null, cancelled: false };
     try {
-      await this.work(job);
+      const chore = this.chores.get(id);
+      this.chores.delete(id);
+      if (chore) await this.runChore(job, chore);
+      else await this.work(job);
     } catch (error) {
       job.error = error instanceof Error ? error.message : String(error);
       await this.emit(job.id, { type: "error", message: job.error });
@@ -284,6 +322,25 @@ export class Computah {
       this.current = null;
       void this.drain();
     }
+  }
+
+  /** A chore: the runner's own piece of work, done in turn like a request and shown the same way. */
+  private async runChore(job: Job, chore: Chore) {
+    const current = this.current;
+    if (!current) return;
+    job.state = "working";
+    job.startedAt = Date.now();
+    await this.save(job);
+    await this.emit(job.id, { type: "state", state: "working" });
+    job.summary = await chore({
+      job,
+      ask: async (prompt) => {
+        const { command, args, stdin } = this.options.agent.command(prompt, this.root);
+        return this.runAgent(job, current, command, args, stdin);
+      },
+      cancelled: () => current.cancelled,
+    });
+    await this.finish(job, current.cancelled ? "cancelled" : "done");
   }
 
   private async work(job: Job) {

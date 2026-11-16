@@ -596,7 +596,7 @@ function JobRow(props: {
             undo
           </button>
         )}
-        {(job.state === "failed" || job.state === "cancelled" || job.state === "undone") && (
+        {!job.chore && (job.state === "failed" || job.state === "cancelled" || job.state === "undone") && (
           <button type="button" className="link" onClick={props.onRetry}>
             ask again
           </button>

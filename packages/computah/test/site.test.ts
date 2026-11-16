@@ -35,6 +35,16 @@ const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encodi
 const agent: Agent = {
   name: "scripted",
   command: (prompt) => {
+    // Asked to settle a conflict, it keeps both sides' lines, unless one of the requests said to give up.
+    if (prompt.includes("in the middle of that git merge")) {
+      return {
+        command: "bash",
+        args: [
+          "-c",
+          `grep -q "give up" page.txt || { grep -v -E '^(<<<<<<<|=======|>>>>>>>)' page.txt > merged && mv merged page.txt; }; echo "RESULT Kept yours and theirs."`,
+        ],
+      };
+    }
     // Asked to fix a build, it mends the word that breaks it, unless the request said "forever".
     if (prompt.includes("The build failed with")) {
       return { command: "bash", args: ["-c", `grep -q forever page.txt || sed -i 's/broken/mended/' page.txt; echo "RESULT Mended it."`] };
@@ -176,6 +186,59 @@ describe("a served app", () => {
     // Undo takes out the change and its fix together.
     expect((await post("olive", `/jobs/${job.id}/undo`)).status).toBe(200);
     expect(await page()).toBe("hello\n");
+  });
+
+  it("has the agent settle it when everyone's version and a member's change the same lines", async () => {
+    await ask("mel", "from mel");
+    await ask("olive", "from olive");
+    // Both added a line in the same place, so the plain merge conflicts and mel's version falls behind.
+    const me = async () => (await (await fetch(`${base}/__computah/me`, { headers: as("mel") })).json()) as { stale: boolean };
+    for (let i = 0; i < 100 && !(await me()).stale; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    // Showing up is what starts the catch-up. It appears in mel's box like any request.
+    let chore: Job | undefined;
+    for (let i = 0; i < 400; i++) {
+      await me();
+      const jobs = ((await (await fetch(`${base}/__computah/jobs`, { headers: as("mel") })).json()) as { jobs: Job[] }).jobs;
+      chore = jobs.find((job) => job.chore);
+      if (chore && !["queued", "working"].includes(chore.state)) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(chore?.state).toBe("done");
+    expect(chore?.summary).toBe("Kept yours and theirs.");
+    expect((await me()).stale).toBe(false);
+    // Mel now has both changes; everyone else still has only olive's.
+    expect(await page("mel")).toBe("hello\nfrom mel\nfrom olive\n");
+    expect(await page("max")).toBe("hello\nfrom olive\n");
+  });
+
+  it("leaves a member's version exactly as it was when the conflict can't be settled", async () => {
+    await ask("mel", "give up");
+    await ask("olive", "from olive");
+    const me = async () => (await (await fetch(`${base}/__computah/me`, { headers: as("mel") })).json()) as { stale: boolean };
+    for (let i = 0; i < 100 && !(await me()).stale; i++) await new Promise((resolve) => setTimeout(resolve, 20));
+    let chore: Job | undefined;
+    for (let i = 0; i < 400; i++) {
+      const jobs = ((await (await fetch(`${base}/__computah/jobs`, { headers: as("mel") })).json()) as { jobs: Job[] }).jobs;
+      chore = jobs.find((job) => job.chore && !["queued", "working"].includes(job.state));
+      if (chore) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(chore?.state).toBe("failed");
+    expect(chore?.error).toMatch(/so yours is as it was\. It left conflict markers behind/);
+    // Coming back doesn't make it try again against the same state of everyone's version.
+    for (let i = 0; i < 5; i++) await me();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const chores = ((await (await fetch(`${base}/__computah/jobs`, { headers: as("mel") })).json()) as { jobs: Job[] }).jobs.filter(
+      (job) => job.chore,
+    );
+    expect(chores).toHaveLength(1);
+    expect(await page("mel")).toBe("hello\ngive up\n");
+    expect(
+      execFileSync("git", ["status", "--porcelain"], {
+        cwd: join(repo, ".computah/work", slugFor({ id: "mel" })),
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("");
   });
 
   it("brings people's own versions up to date when the runner starts again after everyone's version moved", async () => {

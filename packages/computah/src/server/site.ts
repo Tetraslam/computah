@@ -7,6 +7,7 @@ import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
 import { GUEST_COOKIE, guestFrom, guestToken, type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
+import { buildMergePrompt } from "./prompt.js";
 import type { Sandbox } from "./sandbox.js";
 import type { Agent, Job, JobContext } from "./types.js";
 
@@ -80,6 +81,10 @@ interface Version {
   url?: string;
   /** True when newer changes to everyone's version couldn't be merged in. */
   stale?: boolean;
+  /** True while the agent is merging everyone's latest into this version. */
+  catching?: boolean;
+  /** The commit of everyone's version that catching up was last tried against. */
+  gaveUpAt?: string;
 }
 
 export interface Me {
@@ -240,6 +245,8 @@ export class Site {
   async me(person: Person | null, wantsMain = false): Promise<Me> {
     const level = this.level(person);
     const mine = person ? this.own.get(slugFor(person)) : undefined;
+    // They're here, and their version is behind: start catching it up.
+    if (mine?.stale) this.catchUp(mine);
     const version = this.versionFor(person, wantsMain);
     const proposals: Me["proposals"] = [];
     if (level === "owner") {
@@ -247,7 +254,7 @@ export class Site {
         if (other === mine) continue;
         const changes = other.lane
           .list()
-          .filter((job) => job.state === "done" && (job.files?.length ?? 0) > 0)
+          .filter((job) => !job.chore && job.state === "done" && (job.files?.length ?? 0) > 0)
           .map((job) => job.text);
         if (changes.length) proposals.push({ id: other.id, name: other.person?.name ?? other.id, changes });
       }
@@ -404,10 +411,99 @@ export class Site {
         version.stale = false;
         if (this.push ? !!version.url : version.release && !version.release.process.exited) void this.release(version).catch(() => {});
       } catch {
+        // It conflicts. Leave their version as it was for now; the agent sorts it out when they next show up.
         await this.git(version.workDir, ["merge", "--abort"]).catch(() => "");
         version.stale = true;
       }
     }
+  }
+
+  /**
+   * A person's version conflicts with everyone's latest: have the agent merge the two, keeping
+   * what everyone's version changed and what this person asked for. If it can't, their version
+   * stays exactly as it was.
+   */
+  private catchUp(version: Version) {
+    if (!version.stale || version.catching || version === this.main) return;
+    version.catching = true;
+    const person = version.person ?? null;
+    const member = this.level(person) === "member";
+    void this.head(this.main)
+      .then((latest) => {
+        // One try per state of everyone's version. If it failed against this one, wait for the next.
+        if (version.gaveUpAt === latest) {
+          version.catching = false;
+          return;
+        }
+        version.gaveUpAt = latest;
+        return this.settle(version, member);
+      })
+      .catch(() => {
+        version.catching = false;
+      });
+  }
+
+  private settle(version: Version, member: boolean) {
+    return version.lane
+      .chore("catch up with everyone's version", { by: version.person, version: version.id }, async ({ ask, cancelled }) => {
+        const before = await this.head(version);
+        const undo = async () => {
+          await this.git(version.workDir, ["merge", "--abort"]).catch(() => "");
+          await this.git(version.workDir, ["reset", "--hard", before]).catch(() => "");
+        };
+        try {
+          const clean = await this.git(version.workDir, ["merge", "--no-commit", "--no-ff", "--no-gpg-sign", MAIN]).then(
+            () => true,
+            () => false,
+          );
+          let summary = "caught up with everyone's version.";
+          if (!clean) {
+            const conflicted = (await this.git(version.workDir, ["diff", "--name-only", "--diff-filter=U", "-z"]))
+              .split("\0")
+              .filter(Boolean);
+            if (!conflicted.length) throw new Error("The merge failed.");
+            const asked = version.lane
+              .list()
+              .filter((job) => !job.chore && job.state === "done" && (job.files?.length ?? 0) > 0)
+              .reverse()
+              .map((job) => job.text);
+            const rules = member ? (this.options.trust.memberRules ?? this.options.trust.memberNote) : undefined;
+            const outcome = await ask(buildMergePrompt(conflicted, asked, { note: rules }));
+            if (cancelled() || outcome.failed) throw new Error(outcome.failed ?? "Stopped.");
+            // The agent may only have resolved the conflicted files, and must have resolved all of them.
+            const touched = (await this.git(version.workDir, ["diff", "--name-only", "-z"])).split("\0").filter(Boolean);
+            const stray = touched.filter((file) => !conflicted.includes(file));
+            if (stray.length) throw new Error("It changed files that weren't part of the conflict.");
+            const contents = await Promise.all(
+              conflicted.map(async (path) => ({ path, content: await readFile(join(version.workDir, path), "utf8").catch(() => null) })),
+            );
+            if (contents.some(({ content }) => content !== null && /^(<{7}|>{7}) |^={7}$/m.test(content)))
+              throw new Error("It left conflict markers behind.");
+            const objection = member ? this.options.trust.memberCheck?.(contents) : null;
+            if (objection) throw new Error(objection);
+            await this.git(version.workDir, ["add", "-A", "--", ...conflicted]);
+            if (outcome.summary) summary = outcome.summary;
+          }
+          await this.git(version.workDir, ["commit", "--no-edit", "--no-gpg-sign", "-m", "computah: catch up with everyone's version"]);
+          try {
+            await this.release(version);
+          } catch (error) {
+            throw new Error(`It merged but didn't build. ${firstLine(error)}`);
+          }
+          version.stale = false;
+          return summary;
+        } catch (error) {
+          await undo();
+          throw new Error(
+            `Couldn't catch up with everyone's version, so yours is as it was. ${error instanceof Error ? error.message : ""}`.trim(),
+          );
+        } finally {
+          version.catching = false;
+        }
+      })
+      .catch(() => {
+        version.catching = false;
+      });
   }
 
   // ---------- building and serving ----------
