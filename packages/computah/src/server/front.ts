@@ -26,14 +26,19 @@ export function isNavigation(request: IncomingMessage): boolean {
  * told its name in a cookie; everything that page then fetches goes to that same copy, so a
  * page never mixes files from two builds while a change is being swapped in.
  */
-async function route(site: Site, person: Person | null, request: IncomingMessage): Promise<{ port: number; setCookie?: string }> {
+async function route(
+  site: Site,
+  person: Person | null,
+  request: IncomingMessage,
+): Promise<{ port: number; local: boolean; setCookie?: string }> {
   if (!isNavigation(request)) {
     const pinned = site.copy(cookie(request, COPY_COOKIE));
-    if (pinned) return { port: pinned };
+    if (pinned) return { port: pinned.port, local: pinned.live };
   }
   const target = await site.target(person, wantsMain(request));
   return {
     port: target.port,
+    local: target.live,
     setCookie: isNavigation(request) ? `${COPY_COOKIE}=${target.copy}; Path=/; SameSite=Lax; HttpOnly` : undefined,
   };
 }
@@ -91,8 +96,8 @@ export function createFrontServer(site: Site): Server {
       person = await site.identify(request);
       const path = new URL(request.url ?? "/", "http://front").pathname;
       if (path === PREFIX || path.startsWith(`${PREFIX}/`)) return await api(site, person, path.slice(PREFIX.length), request, response);
-      const { port, setCookie } = await route(site, person, request);
-      proxyRequest(request, response, port, setCookie);
+      const { port, local, setCookie } = await route(site, person, request);
+      proxyRequest(request, response, port, { setCookie, local });
     } catch (error) {
       if (response.headersSent) return void response.end();
       if (error instanceof RequestError) return send(response, error.status, { error: error.message });
@@ -102,8 +107,8 @@ export function createFrontServer(site: Site): Server {
   server.on("upgrade", async (request, socket, head) => {
     try {
       const person = await site.identify(request);
-      const { port } = await route(site, person, request);
-      proxyUpgrade(request, socket, head, port);
+      const { port, local } = await route(site, person, request);
+      proxyUpgrade(request, socket, head, port, local);
     } catch {
       socket.destroy();
     }

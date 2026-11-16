@@ -141,14 +141,15 @@ export class Site {
     return name;
   }
 
-  /** The port of a copy by name, if it's still running. */
-  copy(name: string | undefined): number | null {
+  /** A copy by name, if it's still running, and whether it's a hot-reloading one. */
+  copy(name: string | undefined): { port: number; live: boolean } | null {
     const process = name ? this.copies.get(name) : undefined;
     if (!process || process.exited) {
       if (name) this.copies.delete(name);
       return null;
     }
-    return process.port;
+    const live = [this.main, ...this.own.values()].some((version) => version.live?.process === process);
+    return { port: process.port, live };
   }
 
   /** The copy that should answer this person, starting one if needed. */

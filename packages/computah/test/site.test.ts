@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFrontServer, refuseWrite } from "../src/server/front.js";
 import { globToRegExp, header, levelOf, outsidePaths, slugFor } from "../src/server/identity.js";
+import { asLocal } from "../src/server/proxy.js";
 import { Site } from "../src/server/site.js";
 import type { Agent, Job } from "../src/server/types.js";
 
@@ -255,6 +256,16 @@ describe("a page and the copy that served it", () => {
 
   it("ignores a made-up copy name", async () => {
     expect(await page(undefined, "computah_copy=nope")).toBe("hello\n");
+  });
+});
+
+describe("a live copy sees requests as its own", () => {
+  it("rewrites host, origin and referer, and leaves other sites' values alone", () => {
+    expect(asLocal("host", "app.example", 4000, "app.example")).toBe("localhost:4000");
+    expect(asLocal("origin", "https://app.example", 4000, "app.example")).toBe("http://localhost:4000");
+    expect(asLocal("referer", "https://app.example/notes?a=1", 4000, "app.example")).toBe("http://localhost:4000/notes?a=1");
+    expect(asLocal("origin", "https://evil.example", 4000, "app.example")).toBe("https://evil.example");
+    expect(asLocal("cookie", "a=b", 4000, "app.example")).toBe("a=b");
   });
 });
 
