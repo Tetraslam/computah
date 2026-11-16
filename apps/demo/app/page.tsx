@@ -1,3 +1,4 @@
+import { Cat } from "./cat";
 import { Counter } from "./counter";
 
 const ideas = [
@@ -31,6 +32,9 @@ export default function Home() {
         </h2>
         <div className="mt-3">
           <Counter />
+        </div>
+        <div className="mt-4">
+          <Cat />
         </div>
 
         <h2 className="mt-6 font-ui text-[13px] font-bold">
