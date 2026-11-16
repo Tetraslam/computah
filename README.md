@@ -119,7 +119,6 @@ Each person's version is a git branch (`computah/u/<name>`); everyone's is `comp
 
 ## Not done yet
 
-- OpenCode and Codex have been run against the real agents. Claude Code's adapter is written from its documented output format and tested against sample lines.
 - Changes reach people by building and swapping on the machine that serves the app. There is no adapter yet for hosts that build for you (Vercel) or for running the agent in a separate sandbox.
 - A member's agent runs with the same access to the machine as an owner's. `memberPaths` limits what a change may touch, not what the agent can read while working.
 - When someone's own version conflicts with everyone's, it is marked as behind and left alone. Nothing resolves the conflict yet.
