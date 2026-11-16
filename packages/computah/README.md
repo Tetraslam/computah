@@ -2,7 +2,7 @@
 
 An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode or Codex) makes the change in your repo while you watch.
 
-![Typing a request into the box and watching a counter become a stopwatch](https://raw.githubusercontent.com/tetraslam/computah/master/docs/demo.gif)
+![Typing a request into the box and watching a counter become a stopwatch](https://computah.tetraslam.world/demo.gif)
 
 The idea is Patrick Collison's: ["a freeform text input that's hooked up to an agent that yolo implements whatever is submitted."](https://x.com/patrickc/status/2116636967517798672) This is that, as a library.
 
@@ -103,7 +103,6 @@ export default {
 };
 ```
 
-![The served demo after three changes](https://raw.githubusercontent.com/tetraslam/computah/master/docs/served.png)
 
 What each person can do:
 
@@ -210,7 +209,7 @@ pnpm dev        # the demo card at localhost:3000, with its own box
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-The look is described in [BRIEF.md](https://github.com/tetraslam/computah/blob/master/BRIEF.md).
+Docs: <https://computah.tetraslam.world>
 
 ## License
 
