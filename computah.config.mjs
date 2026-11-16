@@ -7,7 +7,7 @@ export default {
   port: Number(process.env.PORT ?? 8000),
   app: {
     dir: "apps/demo",
-    install: "pnpm install --frozen-lockfile && pnpm --filter computah build",
+    install: "pnpm install --frozen-lockfile && pnpm --filter @tetraslam13/computah build",
     build: "pnpm build",
     start: "pnpm exec next start",
     dev: "pnpm exec next dev",

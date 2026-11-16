@@ -42,7 +42,7 @@ export function header(idHeader: string, nameHeader?: string): Identity {
 
 /**
  * Take the person from the app's own server, which forwards the box's requests to the runner
- * with a shared secret and says who is signed in. Use with `createProxy` from "computah/next".
+ * with a shared secret and says who is signed in. Use with `createProxy` from "@tetraslam13/computah/next".
  */
 export function gateway(secret: string): Identity {
   const wanted = Buffer.from(`Bearer ${secret}`);

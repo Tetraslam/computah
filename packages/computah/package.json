@@ -1,5 +1,5 @@
 {
-  "name": "computah",
+  "name": "@tetraslam13/computah",
   "version": "0.1.0",
   "description": "An improvements box for your app: type a change, and a coding agent you already have makes it.",
   "license": "MIT",
@@ -7,7 +7,8 @@
   "sideEffects": false,
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "bin": {
     "computah": "./dist/cli.js"
@@ -30,7 +31,8 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -43,5 +45,23 @@
     "react": "latest",
     "react-dom": "latest",
     "vitest": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetraslam/computah.git",
+    "directory": "packages/computah"
+  },
+  "homepage": "https://computah.tetraslam.world",
+  "keywords": [
+    "agent",
+    "react",
+    "improvements",
+    "malleable-software",
+    "claude-code",
+    "codex",
+    "opencode"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,4 +1,4 @@
-import { Computah } from "computah";
+import { Computah } from "@tetraslam13/computah";
 import type { Metadata } from "next";
 import "./globals.css";
 
