@@ -162,6 +162,7 @@ export class Site {
   private identity: Promise<NodeJS.ProcessEnv> | null = null;
   private lingering = new Set<string>();
   private tidying = false;
+  private tidyAgain = false;
   /** How many agents are running right now, and who is waiting for a turn. */
   private agents = { running: 0, waiting: [] as (() => void)[] };
   /** Compiled pieces by the hash of their source, which is also the name the page asks for. */
@@ -478,7 +479,12 @@ export class Site {
    * running, or was replaced so recently that open pages may still be fetching from it.
    */
   private async tidy() {
-    if (this.push || this.tidying) return;
+    if (this.push) return;
+    if (this.tidying) {
+      // Something changed while a pass was under way: go round once more when it's done, so nothing is missed.
+      this.tidyAgain = true;
+      return;
+    }
     this.tidying = true;
     try {
       const folder = join(this.root, DATA, "releases");
@@ -498,6 +504,10 @@ export class Site {
       await this.git(this.root, ["worktree", "prune"]).catch(() => "");
     } finally {
       this.tidying = false;
+    }
+    if (this.tidyAgain) {
+      this.tidyAgain = false;
+      await this.tidy();
     }
   }
 
