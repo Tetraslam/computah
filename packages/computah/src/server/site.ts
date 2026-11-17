@@ -484,7 +484,8 @@ export class Site {
       for (const version of [this.main, ...this.own.values()]) {
         if (!version) continue;
         if (version.release) keep.add(version.release.dir);
-        keep.add(this.releaseDir(version, await this.head(version).catch(() => "")));
+        // A version served as pieces has no build of its own to keep.
+        if (!version.pieces) keep.add(this.releaseDir(version, await this.head(version).catch(() => "")));
       }
       for (const name of await readdir(folder).catch(() => [] as string[])) {
         const dir = join(folder, name);
