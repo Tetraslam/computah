@@ -1,0 +1,122 @@
+---
+title: styling it
+description: making the box look like your app
+---
+
+the box looks like an old mac by default, which is cute in my stuff and probably wrong in yours. there are three ways to change it, from least to most effort
+
+## colors, fonts and corners
+
+pass a theme:
+
+```tsx
+<Computah
+  theme={{
+    ink: "#e8e6e1",
+    paper: "#17181c",
+    radius: "14px",
+    controlRadius: "999px",
+    shadow: "0 18px 50px rgba(0,0,0,.55)",
+    titlebar: "#17181c",
+    font: "ui-rounded, system-ui, sans-serif",
+    wordsFont: "system-ui, sans-serif",
+  }}
+/>
+```
+
+or set the same things from css, which is nicer if you already have tokens or a dark mode:
+
+```css
+[data-computah] {
+  --computah-ink: var(--foreground);
+  --computah-paper: var(--background);
+  --computah-radius: 14px;
+}
+```
+
+| theme | css variable | what it is | default |
+| --- | --- | --- | --- |
+| `ink` | `--computah-ink` | text, borders, filled shapes | black |
+| `paper` | `--computah-paper` | backgrounds | white |
+| `font` | `--computah-font` | labels and buttons | the system ui font |
+| `wordsFont` | `--computah-words-font` | what you typed and what the agent said | a serif |
+| `monoFont` | `--computah-mono-font` | steps and commands | the system monospace |
+| `radius` | `--computah-radius` | corners of the window and the field | square |
+| `controlRadius` | `--computah-control-radius` | corners of buttons | 6px |
+| `shadow` | `--computah-shadow` | the window's shadow, `none` to drop it | a hard 2px edge |
+| `titlebar` | `--computah-titlebar` | the title bar's background | pinstripes |
+| `width` | `--computah-width` | how wide the window is | 420px |
+| `zIndex` | `--computah-z-index` | in case it ends up under something | 2147483000 |
+
+the little dither patterns (waiting, disabled) get drawn in whatever your ink color is, so they keep working
+
+## restyling a specific piece
+
+the box lives in a shadow root so your css can't break it by accident, but the pieces have names you can reach on purpose with `::part()`:
+
+```css
+[data-computah]::part(send) {
+  background: #7c5cff;
+  border-color: #7c5cff;
+  color: white;
+  box-shadow: none;
+}
+```
+
+that plus the theme above is this:
+
+![the box in a dark rounded theme with a purple send button](/themed.png)
+
+the parts are `window`, `titlebar`, `title`, `close`, `requests`, `request`, `request-text`, `status`, `steps`, `form`, `field`, `controls`, `button`, `send`, `notice` and `launcher`
+
+## building your own box
+
+if you want something that isn't a floating window at all, the box's brain is a hook and you can draw whatever you like on top of it:
+
+```tsx
+"use client";
+
+import { useBox } from "@tetraslam13/computah";
+
+export function MyBox() {
+  const box = useBox({ active: true });
+  if (box.connection !== "ready") return null;
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const field = event.currentTarget.elements.namedItem("ask") as HTMLInputElement;
+        void box.submit(field.value);
+        field.value = "";
+      }}
+    >
+      <input name="ask" placeholder="what should change?" />
+      <ul>
+        {box.jobs.map((job) => (
+          <li key={job.id}>
+            {job.text}: {job.activity ?? job.summary ?? job.state}
+            {job.state === "done" && <button onClick={() => void box.undo(job.id)}>undo</button>}
+          </li>
+        ))}
+      </ul>
+    </form>
+  );
+}
+```
+
+`useBox` gives you:
+
+| | |
+| --- | --- |
+| `connection` | `"connecting"`, `"ready"`, `"offline"` or `"refused"` |
+| `jobs` | the requests, newest first, each with its `state`, live `activity`, `steps`, `summary` and so on |
+| `submit(text, element?, scope?)` | send a request. `element` is something on the page to point the agent at, `scope` is `"everyone"` or `"me"` |
+| `cancel(id)`, `undo(id)` | stop or undo one |
+| `info` | who the runner thinks you are: `level`, which version you're on, `proposals` if you own the app |
+| `promote(id)`, `discard(id)`, `view(version)` | the owner and version stuff from [people and trust](/people-and-trust) |
+| `problem`, `dismissProblem()` | the last thing that went wrong, as a sentence |
+
+`active` is whether your box is open. it only starts talking to the runner once it is, unless the runner is serving the app, in which case it connects right away
+
+the one thing the hook doesn't do for you is the reloads when the runner serves the app (your page has to reload onto the new build when a change lands), so if you build your own box for a served app you'll want to reload when a job of yours goes to `done`. i should probably move that into the hook

@@ -15,6 +15,55 @@ import { type ClientOptions, describeElement, type JobEvent } from "./client.js"
 import { STYLES } from "./styles.js";
 import { type BoxJob, useBox } from "./use-box.js";
 
+export interface Theme {
+  /** Text, borders and filled shapes. Default black. */
+  ink?: string;
+  /** Backgrounds. Default white. */
+  paper?: string;
+  /** Labels and buttons. Default: the system UI font. */
+  font?: string;
+  /** What you typed and what the agent answered. Default: a serif. */
+  wordsFont?: string;
+  /** Steps and commands. Default: the system monospace font. */
+  monoFont?: string;
+  /** Corners of the window and the field, for example "10px". Default square. */
+  radius?: string;
+  /** Corners of buttons. Default "6px". */
+  controlRadius?: string;
+  /** The window's shadow. Default: a hard 2px edge. "none" removes it. */
+  shadow?: string;
+  /** The title bar's background. Default: pinstripes. */
+  titlebar?: string;
+  /** The window's width. Default "420px". */
+  width?: string;
+  /** Default 2147483000. */
+  zIndex?: number | string;
+}
+
+const THEME_VARS: Record<keyof Theme, string> = {
+  ink: "--computah-ink",
+  paper: "--computah-paper",
+  font: "--computah-font",
+  wordsFont: "--computah-words-font",
+  monoFont: "--computah-mono-font",
+  radius: "--computah-radius",
+  controlRadius: "--computah-control-radius",
+  shadow: "--computah-shadow",
+  titlebar: "--computah-titlebar",
+  width: "--computah-width",
+  zIndex: "--computah-z-index",
+};
+
+/** A theme as CSS variables, for the box's root element. */
+export function themeStyle(theme: Theme | undefined): CSSProperties {
+  const style: Record<string, string> = {};
+  for (const [key, name] of Object.entries(THEME_VARS)) {
+    const value = theme?.[key as keyof Theme];
+    if (value !== undefined && value !== "") style[name] = String(value);
+  }
+  return style as CSSProperties;
+}
+
 export interface ComputahProps extends ClientOptions {
   /** Keys that open and close the box. "mod" is ⌘ on a Mac and Ctrl elsewhere. Default "mod+.". */
   hotkey?: string;
@@ -24,6 +73,12 @@ export interface ComputahProps extends ClientOptions {
   launcher?: boolean;
   /** Start open. Default false. */
   defaultOpen?: boolean;
+  /**
+   * Colours, fonts and shape, to match your app. Each one can also be set from CSS as
+   * `--computah-<name>` on `[data-computah]`. For more than this, style the named parts with
+   * `[data-computah]::part(window)` and friends, or build your own box on `useBox`.
+   */
+  theme?: Theme;
 }
 
 interface Saved {
@@ -119,6 +174,7 @@ export function Computah({
   defaultOpen = false,
   endpoint,
   secret,
+  theme,
 }: ComputahProps) {
   const [root, setRoot] = useState<ShadowRoot | null>(null);
   const [open, setOpen] = useState(false);
@@ -135,6 +191,7 @@ export function Computah({
   const [mac, setMac] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   const windowRef = useRef<HTMLElement>(null);
+  const rootElement = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<Element | null>(null);
   const box = useBox({ endpoint, secret, active: open });
   const live = box.jobs.some((job) => job.state === "queued" || job.state === "working");
@@ -201,7 +258,7 @@ export function Computah({
     };
     const outline = document.createElement("div");
     outline.className = "zoom";
-    root.appendChild(outline);
+    (rootElement.current ?? root).appendChild(outline);
     element.setAttribute("data-zooming", "");
     const frame = (rect: { left: number; top: number; width: number; height: number }) => ({
       left: `${rect.left}px`,
@@ -376,10 +433,17 @@ export function Computah({
   const keys = hotkeyLabel(hotkey, mac);
 
   return createPortal(
-    <>
+    <div ref={rootElement} style={{ display: "contents", ...themeStyle(theme) }}>
       <style>{STYLES}</style>
       {launcher && !open && (
-        <button type="button" className="launcher" onClick={show} aria-label={`Open ${title} (${keys})`} title={`${title}  ${keys}`}>
+        <button
+          type="button"
+          className="launcher"
+          part="launcher"
+          onClick={show}
+          aria-label={`Open ${title} (${keys})`}
+          title={`${title}  ${keys}`}
+        >
           <span className="launcher-mark" aria-hidden="true" />
         </button>
       )}
@@ -400,14 +464,24 @@ export function Computah({
         </div>
       )}
       {open && (
-        <section ref={windowRef} className="window" data-picking={picking || undefined} role="dialog" aria-label={title} style={style}>
-          <header className="titlebar" onPointerDown={drag}>
-            <button type="button" className="closebox" onClick={hide} aria-label="Close" />
-            <span className="title">{title}</span>
+        <section
+          ref={windowRef}
+          className="window"
+          part="window"
+          data-picking={picking || undefined}
+          role="dialog"
+          aria-label={title}
+          style={style}
+        >
+          <header className="titlebar" part="titlebar" onPointerDown={drag}>
+            <button type="button" className="closebox" part="close" onClick={hide} aria-label="Close" />
+            <span className="title" part="title">
+              {title}
+            </span>
           </header>
 
           {box.connection === "offline" || box.connection === "refused" ? (
-            <div className="notice" role="status">
+            <div className="notice" part="notice" role="status">
               {box.connection === "offline" ? (
                 <>
                   <p>the runner isn't running. start it in your project:</p>
@@ -451,7 +525,7 @@ export function Computah({
                 </p>
               )}
               {box.jobs.length > 0 && (
-                <ol className="jobs" aria-live="polite">
+                <ol className="jobs" part="requests" aria-live="polite">
                   {box.jobs.slice(0, 20).map((job) => (
                     <JobRow
                       key={job.id}
@@ -479,6 +553,7 @@ export function Computah({
               )}
               <form
                 className="ask"
+                part="form"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void send();
@@ -487,6 +562,7 @@ export function Computah({
                 <textarea
                   ref={field}
                   className="field"
+                  part="field"
                   rows={1}
                   value={draft}
                   placeholder={box.jobs.length ? "what else should change?" : "what should change?"}
@@ -497,7 +573,7 @@ export function Computah({
                   }}
                   onKeyDown={onFieldKey}
                 />
-                <div className="controls">
+                <div className="controls" part="controls">
                   {picked ? (
                     <span className="chip">
                       <span className="chip-text">about “{pickedLabel}”</span>
@@ -506,7 +582,7 @@ export function Computah({
                       </button>
                     </span>
                   ) : (
-                    <button type="button" className="plain" onClick={() => setPicking(true)}>
+                    <button type="button" className="plain" part="button" onClick={() => setPicking(true)}>
                       point at it
                     </button>
                   )}
@@ -525,7 +601,12 @@ export function Computah({
                       {box.connection !== "ready" ? "connecting" : level === "member" ? "only you will see it" : box.agent}
                     </span>
                   )}
-                  <button type="submit" className="default" disabled={!draft.trim() || box.sending || box.connection !== "ready"}>
+                  <button
+                    type="submit"
+                    className="default"
+                    part="send"
+                    disabled={!draft.trim() || box.sending || box.connection !== "ready"}
+                  >
                     Send
                   </button>
                 </div>
@@ -558,7 +639,7 @@ export function Computah({
           )}
         </section>
       )}
-    </>,
+    </div>,
     root,
   );
 }
@@ -589,9 +670,11 @@ function JobRow(props: {
               : "undone.";
 
   return (
-    <li className="job" data-state={job.state}>
-      <p className="request">{job.text}</p>
-      <div className="status">
+    <li className="job" part="request" data-state={job.state}>
+      <p className="request" part="request-text">
+        {job.text}
+      </p>
+      <div className="status" part="status">
         <span className="mark" aria-hidden="true" />
         <span className="status-text">{status}</span>
         {job.version && job.version !== "main" && !live && !job.url && <span className="quiet">yours</span>}
@@ -625,7 +708,7 @@ function JobRow(props: {
         )}
       </div>
       {props.expanded && (
-        <ol className="steps">
+        <ol className="steps" part="steps">
           {lines.map((line, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: steps are append-only, so the index is stable.
             <li key={index}>{line}</li>

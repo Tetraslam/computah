@@ -67,6 +67,16 @@ Open your app and press `Ctrl+.` (`⌘.` on a Mac).
 
 `computah` (the development runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
 
+## Make it look like your app
+
+The default look is a 1-bit window. Change it with a theme:
+
+```tsx
+<Computah theme={{ ink: "#e8e6e1", paper: "#17181c", radius: "14px", shadow: "0 18px 50px rgba(0,0,0,.55)" }} />;
+```
+
+or the same from CSS, as `--computah-ink`, `--computah-paper`, `--computah-radius` and so on, set on `[data-computah]`. Individual pieces can be restyled with `[data-computah]::part(send)` and friends. For an interface that isn't a floating window at all, `useBox` is the box's logic as a hook. [All of it is in the docs.](https://computah.tetraslam.world/styling)
+
 ## Safety
 
 The runner turns text into code changes, so who can reach it matters.

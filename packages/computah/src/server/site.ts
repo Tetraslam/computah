@@ -346,7 +346,7 @@ export class Site {
   }
 
   async undo(person: Person | null, id: string) {
-    const { version, job } = this.find(person, id, true);
+    const { version } = this.find(person, id, true);
     if (version.lane.busy || version.building) throw new RequestError("Wait for the change in progress to finish first.", 409);
     const undone = await version.lane.undo(id);
     await this.release(version).catch(() => {});
@@ -679,11 +679,6 @@ export class Site {
 
   private releaseDir(version: Version, sha: string) {
     return join(this.root, DATA, "releases", `${version.id}-${sha.slice(0, 10)}`);
-  }
-
-  /** Whether the version's latest commit is already built and only needs starting. */
-  private async isBuilt(version: Version) {
-    return existsSync(join(this.releaseDir(version, await this.head(version)), ".computah-built"));
   }
 
   /** Build a commit into its own folder without starting it. Starting it later takes a moment, not a build. */

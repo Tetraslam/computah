@@ -6,14 +6,25 @@ export const STYLES = /* css */ `
 :host { all: initial; }
 *, *::before, *::after { box-sizing: border-box; }
 
-.window, .launcher, .pick-hint {
-  --ink: #000;
-  --paper: #fff;
-  --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --words: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --checker: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
-  --sparse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='2' height='2' fill='%23fff'/%3E%3Crect width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
-  --stripes: repeating-linear-gradient(var(--ink) 0 1px, var(--paper) 1px 2px);
+/*
+ * Everything an app is likely to want to change is a variable, read from the app's own CSS:
+ *
+ *   [data-computah] { --computah-ink: #eee; --computah-paper: #111; --computah-radius: 10px; }
+ *
+ * The defaults are the 1-bit look. The two dither masks are drawn in the ink colour, whatever it is.
+ */
+.window, .launcher, .pick-hint, .zoom, .pick-frame {
+  --ink: var(--computah-ink, #000);
+  --paper: var(--computah-paper, #fff);
+  --ui: var(--computah-font, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --words: var(--computah-words-font, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  --mono: var(--computah-mono-font, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --radius: var(--computah-radius, 0px);
+  --control-radius: var(--computah-control-radius, 6px);
+  --edge: var(--computah-shadow, 2px 2px 0 var(--ink));
+  --checker-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1'/%3E%3Crect x='1' y='1' width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
+  --sparse-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1'/%3E%3C/svg%3E") 0 0 / 2px 2px;
+  --stripes: var(--computah-titlebar, repeating-linear-gradient(var(--ink) 0 1px, var(--paper) 1px 2px));
   font: 12px/1.35 var(--ui);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -23,23 +34,26 @@ export const STYLES = /* css */ `
 
 .window {
   position: fixed;
-  z-index: 2147483000;
+  z-index: var(--computah-z-index, 2147483000);
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
-  width: min(420px, calc(100vw - 24px));
+  width: min(var(--computah-width, 420px), calc(100vw - 24px));
   max-height: min(560px, calc(100vh - 40px));
   display: flex;
   flex-direction: column;
   background: var(--paper);
   border: 1px solid var(--ink);
-  box-shadow: 2px 2px 0 var(--ink);
+  box-shadow: var(--edge);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 .window[data-picking] { visibility: hidden; }
 .window[data-zooming] { visibility: hidden; }
 
 .titlebar {
   position: relative;
+  border-radius: var(--radius) var(--radius) 0 0;
   flex: none;
   height: 19px;
   display: flex;
@@ -114,7 +128,7 @@ export const STYLES = /* css */ `
   border: 1px solid var(--ink);
   transform: translateY(1px);
 }
-.job[data-state="queued"] .mark { background: var(--sparse); }
+.job[data-state="queued"] .mark { background: var(--ink); -webkit-mask: var(--sparse-mask); mask: var(--sparse-mask); }
 .job[data-state="working"] .mark {
   background: repeating-linear-gradient(90deg, var(--ink) 0 2px, var(--paper) 2px 4px);
   animation: march 480ms steps(4, jump-none) infinite;
@@ -139,13 +153,13 @@ export const STYLES = /* css */ `
   border: 1px solid var(--ink);
   max-height: 132px;
   overflow-y: auto;
-  font: 11px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: 11px/1.45 var(--mono);
   scrollbar-width: thin;
   scrollbar-color: var(--ink) var(--paper);
 }
 .steps li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.proposals { flex: none; margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--ink); background: var(--sparse); }
+.proposals { flex: none; margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--ink); }
 .proposal { margin: 6px; padding: 7px 9px 6px; border: 1px solid var(--ink); background: var(--paper); }
 .proposal .actions { padding-left: 0; }
 .who { font: 700 12px/1.3 var(--ui); margin-right: 3px; }
@@ -162,7 +176,7 @@ export const STYLES = /* css */ `
   margin: 0;
   padding: 6px 8px;
   border: 1px solid var(--ink);
-  border-radius: 0;
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
   font: 14px/1.35 var(--words);
@@ -183,17 +197,17 @@ button { font: inherit; color: inherit; }
   height: 20px;
   padding: 0 11px;
   border: 1px solid var(--ink);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background: var(--paper);
   font-weight: 700;
   line-height: 18px;
   cursor: pointer;
   white-space: nowrap;
 }
-.default { min-width: 58px; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); border-radius: 5px; margin-right: 4px; }
+.default { min-width: 58px; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); margin-right: 4px; }
 .plain:hover, .default:hover:not(:disabled), .plain:active, .default:active:not(:disabled) { background: var(--ink); color: var(--paper); }
 /* Disabled the way a 1-bit screen does it: the label and ring are dithered, not grayed. */
-.default:disabled { cursor: default; color: transparent; background: var(--checker); -webkit-background-clip: text; background-clip: text; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); border-style: dotted; }
+.default:disabled { cursor: default; -webkit-mask: var(--checker-mask); mask: var(--checker-mask); }
 .plain:focus-visible, .default:focus-visible, .link:focus-visible, .chip-x:focus-visible, .launcher:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 .link {
@@ -221,13 +235,13 @@ a.link { color: var(--ink); }
 .notice { padding: 14px 14px 13px; }
 .notice p { margin: 0 0 8px; font: 14px/1.35 var(--words); }
 .notice p.quiet { margin: 8px 0 0; font: 11px/1.35 var(--ui); }
-.command { display: block; padding: 6px 8px; border: 1px solid var(--ink); font: 12px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: all; }
+.command { display: block; padding: 6px 8px; border: 1px solid var(--ink); font: 12px/1.3 var(--mono); user-select: all; }
 
 /* ---------- opening it ---------- */
 
 .launcher {
   position: fixed;
-  z-index: 2147483000;
+  z-index: var(--computah-z-index, 2147483000);
   right: 16px;
   bottom: 16px;
   width: 30px;
@@ -235,7 +249,8 @@ a.link { color: var(--ink); }
   padding: 0;
   border: 1px solid var(--ink);
   background: var(--paper);
-  box-shadow: 2px 2px 0 var(--ink);
+  box-shadow: var(--edge);
+  border-radius: var(--radius);
   cursor: pointer;
 }
 .launcher-mark { position: absolute; inset: 0 0 auto 0; height: 6px; border-bottom: 1px solid var(--ink); background: var(--stripes) content-box; padding: 1px; }
@@ -244,12 +259,12 @@ a.link { color: var(--ink); }
 .launcher:hover::after { border-color: var(--paper); }
 .launcher:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 
-.zoom { position: fixed; z-index: 2147483001; border: 1px solid #000; outline: 1px solid #fff; pointer-events: none; }
+.zoom { position: fixed; z-index: calc(var(--computah-z-index, 2147483000) + 1); border: 1px solid var(--ink); outline: 1px solid var(--paper); border-radius: var(--radius); pointer-events: none; }
 
 /* ---------- pointing ---------- */
 
-.pick { position: fixed; inset: 0; z-index: 2147483001; cursor: crosshair; }
-.pick-frame { position: fixed; outline: 1px solid #000; box-shadow: 0 0 0 2px #fff, 0 0 0 3px #000; pointer-events: none; }
+.pick { position: fixed; inset: 0; z-index: calc(var(--computah-z-index, 2147483000) + 1); cursor: crosshair; }
+.pick-frame { position: fixed; outline: 1px solid var(--ink); box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--ink); pointer-events: none; }
 .pick-hint { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 4px 10px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 var(--ink); font-weight: 700; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {

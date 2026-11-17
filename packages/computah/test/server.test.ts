@@ -568,3 +568,15 @@ describe("the prompt and context", () => {
     expect(Object.keys(context)).not.toContain("extra");
   });
 });
+
+describe("theming", () => {
+  it("turns a theme into the css variables the box reads, and skips what isn't set", async () => {
+    const { themeStyle } = await import("../src/react/Computah.js");
+    expect(themeStyle({ ink: "#eee", radius: "10px", zIndex: 50, font: "" })).toEqual({
+      "--computah-ink": "#eee",
+      "--computah-radius": "10px",
+      "--computah-z-index": "50",
+    });
+    expect(themeStyle(undefined)).toEqual({});
+  });
+});
