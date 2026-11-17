@@ -1,6 +1,6 @@
 "use client";
 
-import { Piece } from "@tetraslam13/computah";
+import { openBox, Piece } from "@tetraslam13/computah";
 import dynamic from "next/dynamic";
 import { Component, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
@@ -82,8 +82,11 @@ export function Playground({ name }: { name: PieceName }) {
         </Catch>
       </div>
       <p className="yours-foot">
-        this part is yours to mess with. open the box with <span className="kbd">Ctrl</span>+<span className="kbd">.</span> (or{" "}
-        <span className="kbd">⌘</span>
+        this part is yours to mess with.{" "}
+        <button type="button" className="push small" onClick={openBox}>
+          open the box
+        </button>{" "}
+        (or <span className="kbd">Ctrl</span>+<span className="kbd">.</span>, <span className="kbd">⌘</span>
         <span className="kbd">.</span> on a mac) and say how it should be different, and only you will see your version
       </p>
     </section>

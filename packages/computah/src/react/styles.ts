@@ -258,6 +258,13 @@ a.link { color: var(--ink); }
 .launcher:hover { background: var(--ink); }
 .launcher:hover::after { border-color: var(--paper); }
 .launcher:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+/* On a touch screen the launcher is big enough to hit, and the field's text is 16px so iOS doesn't zoom the page on focus. */
+@media (pointer: coarse) {
+  .launcher { width: 46px; height: 36px; }
+  .launcher-mark { height: 9px; }
+  .launcher::after { left: 6px; right: 6px; bottom: 6px; height: 9px; }
+  .field { font-size: 16px; }
+}
 
 .zoom { position: fixed; z-index: calc(var(--computah-z-index, 2147483000) + 1); border: 1px solid var(--ink); outline: 1px solid var(--paper); border-radius: var(--radius); pointer-events: none; }
 

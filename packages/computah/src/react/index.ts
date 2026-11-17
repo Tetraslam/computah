@@ -1,4 +1,14 @@
-export { Computah, type ComputahProps, elapsed, hotkeyLabel, matchesHotkey, plainSummary, type Theme, themeStyle } from "./Computah.js";
+export {
+  Computah,
+  type ComputahProps,
+  elapsed,
+  hotkeyLabel,
+  matchesHotkey,
+  openBox,
+  plainSummary,
+  type Theme,
+  themeStyle,
+} from "./Computah.js";
 export type { Job, JobContext, JobEvent } from "./client.js";
 export {
   activityLabel,

@@ -104,6 +104,13 @@ const save = (change: Saved) => {
   }
 };
 
+const OPEN_EVENT = "computah:open";
+
+/** Open the box from anywhere in the app, for example from a button that says "change this". */
+export function openBox() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function matchesHotkey(
@@ -233,7 +240,12 @@ export function Computah({
       else show();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // The app can open the box from a button of its own, which is the only way in on a phone besides the launcher.
+    window.addEventListener(OPEN_EVENT, show);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_EVENT, show);
+    };
   }, [hotkey, open, show, hide]);
 
   useEffect(() => {
