@@ -2,7 +2,7 @@
 
 An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode or Codex) makes the change in your repo while you watch.
 
-![Typing a request into the box and watching a counter become a stopwatch](https://computah.tetraslam.world/demo.gif)
+![Typing a request into the box and watching a counter become a stopwatch](https://computah.sh/demo.gif)
 
 The idea is Patrick Collison's: ["a freeform text input that's hooked up to an agent that yolo implements whatever is submitted."](https://x.com/patrickc/status/2116636967517798672) This is that, as a library.
 
@@ -75,7 +75,7 @@ The default look is a 1-bit window. Change it with a theme:
 <Computah theme={{ ink: "#e8e6e1", paper: "#17181c", radius: "14px", shadow: "0 18px 50px rgba(0,0,0,.55)" }} />;
 ```
 
-or the same from CSS, as `--computah-ink`, `--computah-paper`, `--computah-radius` and so on, set on `[data-computah]`. Individual pieces can be restyled with `[data-computah]::part(send)` and friends. For an interface that isn't a floating window at all, `useBox` is the box's logic as a hook. [All of it is in the docs.](https://computah.tetraslam.world/styling)
+or the same from CSS, as `--computah-ink`, `--computah-paper`, `--computah-radius` and so on, set on `[data-computah]`. Individual pieces can be restyled with `[data-computah]::part(send)` and friends. For an interface that isn't a floating window at all, `useBox` is the box's logic as a hook. [All of it is in the docs.](https://computah.sh/styling)
 
 ## Safety
 
@@ -264,7 +264,7 @@ pnpm dev        # the demo card at localhost:3000, with its own box
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Docs: <https://computah.tetraslam.world>
+Docs: <https://computah.sh>
 
 ## License
 

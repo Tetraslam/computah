@@ -1,4 +1,4 @@
-// How the docs site (apps/docs) is served at computah.tetraslam.world.
+// How the docs site (apps/docs) is served at computah.sh.
 // The site is a computah app itself. Its owner changes anything by typing into its box.
 // Everyone else, signed in or not, can change the framed pieces in apps/docs/playground,
 // each in a version only they see.

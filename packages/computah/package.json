@@ -53,7 +53,7 @@
     "url": "git+https://github.com/tetraslam/computah.git",
     "directory": "packages/computah"
   },
-  "homepage": "https://computah.tetraslam.world",
+  "homepage": "https://computah.sh",
   "keywords": [
     "agent",
     "react",
