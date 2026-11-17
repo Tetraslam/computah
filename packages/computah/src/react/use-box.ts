@@ -25,8 +25,21 @@ const isLive = (job: Job) => job.state === "queued" || job.state === "working";
 const RETRY_MS = 3000;
 
 /** Everything the box knows: the runner's state, the requests, and the actions on them. */
-export function useBox(options: ClientOptions & { active: boolean }) {
+export interface BoxOptions extends ClientOptions {
+  /** Whether your box is open. Until it is, the hook doesn't talk to a development runner. */
+  active: boolean;
+  /**
+   * When the runner serves the app, a finished change is a new build of the page, so the hook
+   * reloads the page to show it. Return true from this to hold a reload for now (say, while the
+   * person is typing). `ready` then turns true, and `reload()` does it when you're ready.
+   */
+  holdReloads?: () => boolean;
+}
+
+export function useBox(options: BoxOptions) {
   const { secret, active } = options;
+  const hold = useRef(options.holdReloads);
+  hold.current = options.holdReloads;
   // Without an explicit endpoint, look for a runner serving this app before falling back to this machine.
   const [endpoint, setEndpoint] = useState(options.endpoint);
   useEffect(() => {
@@ -175,6 +188,60 @@ export function useBox(options: ClientOptions & { active: boolean }) {
     [client, guard],
   );
 
+  // ---------- reloading onto the right copy of the page ----------
+  //
+  // When the runner serves the app (or a host does), a change isn't something hot reload shows:
+  // it's a different build, and the page has to be loaded again to be on it. That happens up to
+  // twice per change: onto a live copy when the agent starts, and onto the built one at the end.
+  const [ready, setReady] = useState(false);
+  const pushed = info?.mode === "push";
+  const reload = useCallback(() => window.location.reload(), []);
+  const reloadOrHold = useCallback(() => {
+    if (hold.current?.()) setReady(true);
+    else window.location.reload();
+  }, []);
+
+  const seen = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (!served && !pushed) return;
+    for (const job of jobs) {
+      const before = seen.current.get(job.id);
+      seen.current.set(job.id, job.state);
+      if (before === undefined || before === job.state) continue;
+      const settled = job.state === "done" || job.state === "undone" || (job.state === "failed" && before === "working");
+      // A version served at its own address is opened from its link, not by reloading this page.
+      if (settled && !(pushed && job.version !== "main")) reloadOrHold();
+    }
+  }, [jobs, served, pushed, reloadOrHold]);
+
+  // While something is being worked on, keep asking who we are: that's how the hook learns a live copy is up.
+  const working = jobs.some((job) => job.state === "working");
+  const waiting = served && !!info?.waiting;
+  useEffect(() => {
+    if (!served || (!working && !waiting)) return;
+    const timer = setInterval(() => void refresh(), 1300);
+    return () => clearInterval(timer);
+  }, [served, working, waiting, refresh]);
+
+  useEffect(() => {
+    if (!served || !working || !info?.live) return;
+    // The live copy is up and this page isn't from it yet: move onto it, once per request.
+    const id = jobs.find((job) => job.state === "working")?.id ?? "";
+    if (sessionStorage.getItem("computah:live") === id || hold.current?.()) return;
+    sessionStorage.setItem("computah:live", id);
+    window.location.reload();
+  }, [served, working, info?.live, jobs]);
+
+  // Their own version was still being put together and they were shown everyone's meanwhile: once it's ready, move over.
+  const wasWaiting = useRef(false);
+  useEffect(() => {
+    if (waiting) wasWaiting.current = true;
+    else if (wasWaiting.current) {
+      wasWaiting.current = false;
+      reloadOrHold();
+    }
+  }, [waiting, reloadOrHold]);
+
   return {
     connection,
     refusal,
@@ -192,6 +259,11 @@ export function useBox(options: ClientOptions & { active: boolean }) {
     discard,
     view,
     refresh,
+    /** True when a change is ready to see but its reload was held. Call `reload()` to show it. */
+    ready,
+    /** True while this person's own version is being put together and they're on everyone's meanwhile. */
+    waiting,
+    reload,
     dismissProblem: () => setProblem(""),
   };
 }

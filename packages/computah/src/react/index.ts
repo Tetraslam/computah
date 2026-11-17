@@ -12,4 +12,4 @@ export {
   RunnerError,
   SERVED_ENDPOINT,
 } from "./client.js";
-export { type BoxJob, type Connection, useBox } from "./use-box.js";
+export { type BoxJob, type BoxOptions, type Connection, useBox } from "./use-box.js";

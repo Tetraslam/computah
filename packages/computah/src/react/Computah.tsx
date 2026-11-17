@@ -185,7 +185,6 @@ export function Computah({
   const [hover, setHover] = useState<DOMRect | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [scope, setScope] = useState<"everyone" | "me">("everyone");
-  const [ready, setReady] = useState(false);
   // Set on the client only: reading the clock during a server render breaks prerendering.
   const [now, setNow] = useState(0);
   const [mac, setMac] = useState(false);
@@ -193,7 +192,10 @@ export function Computah({
   const windowRef = useRef<HTMLElement>(null);
   const rootElement = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<Element | null>(null);
-  const box = useBox({ endpoint, secret, active: open });
+  // Don't reload the page out from under a request that's half typed.
+  const draftRef = useRef("");
+  const box = useBox({ endpoint, secret, active: open, holdReloads: () => !!draftRef.current.trim() });
+  draftRef.current = draft;
   const live = box.jobs.some((job) => job.state === "queued" || job.state === "working");
 
   // Mount a shadow root on the body, so the host app's styles and ours never meet.
@@ -323,59 +325,10 @@ export function Computah({
     };
   }, [picking]);
 
-  // When the runner serves the app, a change arrives as a new copy of the page, so the page is reloaded:
-  // once onto the live copy when work starts, and once onto the built one when it's done.
   const level = box.info?.level;
   const canChoose = box.served && (level === "owner" || level === "trusted");
-  const seen = useRef(new Map<string, string>());
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
   const pushed = box.info?.mode === "push";
-  useEffect(() => {
-    if (!box.served && !pushed) return;
-    for (const job of box.jobs) {
-      const before = seen.current.get(job.id);
-      seen.current.set(job.id, job.state);
-      if (before === undefined || before === job.state) continue;
-      const settled = job.state === "done" || job.state === "undone" || (job.state === "failed" && before === "working");
-      if (!settled) continue;
-      // A version served at its own address is opened from its link, not by reloading this page.
-      if (pushed && job.version !== "main") continue;
-      if (draftRef.current.trim()) setReady(true);
-      else window.location.reload();
-    }
-  }, [box.jobs, box.served, pushed]);
-  const working = box.jobs.some((job) => job.state === "working");
-  useEffect(() => {
-    if (!box.served || !working) return;
-    const refresh = box.refresh;
-    const timer = setInterval(() => void refresh(), 1200);
-    return () => clearInterval(timer);
-  }, [box.served, working, box.refresh]);
-  useEffect(() => {
-    if (!box.served || !working || !box.info?.live) return;
-    // The live copy is up and this page isn't from it yet: move onto it, once per job.
-    const id = box.jobs.find((job) => job.state === "working")?.id ?? "";
-    if (sessionStorage.getItem("computah:live") === id || draftRef.current.trim()) return;
-    sessionStorage.setItem("computah:live", id);
-    window.location.reload();
-  }, [box.served, working, box.info?.live, box.jobs]);
-
-  // Their own version is still being put together and they're on everyone's meanwhile: keep
-  // asking, and move them onto theirs the moment it's ready.
-  const waiting = box.served && !!box.info?.waiting;
-  const wasWaiting = useRef(false);
-  useEffect(() => {
-    if (!waiting) {
-      if (wasWaiting.current && !draftRef.current.trim()) window.location.reload();
-      wasWaiting.current = false;
-      return;
-    }
-    wasWaiting.current = true;
-    const refresh = box.refresh;
-    const timer = setInterval(() => void refresh(), 1500);
-    return () => clearInterval(timer);
-  }, [waiting, box.refresh]);
+  const { ready, waiting } = box;
 
   const send = async () => {
     const text = draft.trim();

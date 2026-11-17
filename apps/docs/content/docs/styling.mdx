@@ -115,8 +115,17 @@ export function MyBox() {
 | `cancel(id)`, `undo(id)` | stop or undo one |
 | `info` | who the runner thinks you are: `level`, which version you're on, `proposals` if you own the app |
 | `promote(id)`, `discard(id)`, `view(version)` | the owner and version stuff from [people and trust](/people-and-trust) |
+| `ready`, `reload()`, `waiting` | for the page reloads, see below |
 | `problem`, `dismissProblem()` | the last thing that went wrong, as a sentence |
 
 `active` is whether your box is open. it only starts talking to the runner once it is, unless the runner is serving the app, in which case it connects right away
 
-the one thing the hook doesn't do for you is the reloads when the runner serves the app (your page has to reload onto the new build when a change lands), so if you build your own box for a served app you'll want to reload when a job of yours goes to `done`. i should probably move that into the hook
+when the runner serves the app, a finished change is a new build of the page, and the hook reloads the page for you so you're on it (the same goes for the live copy while the agent works). if a reload would be rude, like when someone's halfway through typing, pass `holdReloads` and do it yourself later:
+
+```tsx
+const box = useBox({ active: true, holdReloads: () => isTyping });
+
+{box.ready && <button onClick={box.reload}>your change is ready, show it</button>}
+```
+
+`box.waiting` is true for the moment when someone's own version is still being built and they're looking at everyone's instead
