@@ -32,6 +32,11 @@ export interface SiteOptions {
    * `forgetMs` removes a guest's version once they've been away that long.
    */
   guests?: { secret: string; forgetMs?: number; keep?: number };
+  /**
+   * The most builds running at once. Default 1. A build uses a few CPUs by itself, so 2 suits a
+   * machine with 8 or more, and more than that rarely helps.
+   */
+  maxBuilds?: number;
   /** The most agents working at once, across everyone. The rest wait their turn. Default 6. */
   maxAgents?: number;
   /** The most personal copies running at once. Starting one more stops the least recently used. Default: no limit. */
@@ -123,7 +128,8 @@ export class Site {
   private root = "";
   private main!: Version;
   private own = new Map<string, Version>();
-  private builds: Promise<unknown> = Promise.resolve();
+  /** How many builds are running right now, and which are waiting for a place. */
+  private builds = { running: 0, waiting: [] as (() => void)[] };
   private reaper: NodeJS.Timeout | null = null;
   private counts = new Map<string, { day: string; sent: number }>();
   /** Every running copy by a random name, so a page keeps talking to the copy that served it. */
@@ -689,15 +695,34 @@ export class Site {
     return this.release(version);
   }
 
-  /** Build the version's latest commit and swap it in. One build runs at a time. */
+  /**
+   * Run a build in its turn: after any build this version already has going, and with at most
+   * `maxBuilds` running across every version.
+   */
+  private inLine<T>(version: Version, run: () => Promise<T>): Promise<T> {
+    const earlier = (version.building ?? Promise.resolve()).catch(() => {});
+    return earlier.then(async () => {
+      const limit = Math.max(1, this.options.maxBuilds ?? 1);
+      if (this.builds.running >= limit) await new Promise<void>((resolve) => this.builds.waiting.push(resolve));
+      else this.builds.running++;
+      try {
+        return await run();
+      } finally {
+        // A waiting build is handed this one's place directly, so nothing can slip in ahead of it.
+        const next = this.builds.waiting.shift();
+        if (next) next();
+        else this.builds.running--;
+      }
+    });
+  }
+
+  /** Build the version's latest commit and swap it in. */
   private release(version: Version, sha?: string): Promise<void> {
-    const building = this.builds
-      .then(() => this.build(version, sha))
-      .finally(() => {
-        if (version.building === building) version.building = undefined;
-      });
+    const building = this.inLine(version, () => this.build(version, sha)).finally(() => {
+      if (version.building === building) version.building = undefined;
+    });
     version.building = building;
-    this.builds = building.catch(() => {});
+    building.catch(() => {});
     return building;
   }
 
@@ -755,19 +780,17 @@ export class Site {
 
   /** Build a version's latest commit ahead of time, in turn with other builds, so its person doesn't wait for it. */
   private prebuild(version: Version) {
-    const building = this.builds
-      .then(async () => {
-        const sha = await this.head(version);
-        await this.prepare(version, sha);
-        // If they came back meanwhile and are on an older build, move them to this one.
-        if (version.release && !version.release.process.exited && version.release.sha !== sha) await this.build(version, sha);
-      })
+    const building = this.inLine(version, async () => {
+      const sha = await this.head(version);
+      await this.prepare(version, sha);
+      // If they came back meanwhile and are on an older build, move them to this one.
+      if (version.release && !version.release.process.exited && version.release.sha !== sha) await this.build(version, sha);
+    })
       .catch(() => {})
       .finally(() => {
         if (version.building === building) version.building = undefined;
       });
     version.building = building;
-    this.builds = building;
   }
 
   /** Build (if needed) and start a commit of this version, by default its latest, and swap it in. */

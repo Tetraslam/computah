@@ -52,5 +52,7 @@ export default {
   // Each running copy is about 100 MB of memory, and each agent is one sandbox machine.
   maxCopies: 12,
   maxAgents: 6,
+  // One build uses about four CPUs, and the machine has eight.
+  maxBuilds: Number(process.env.COMPUTAH_MAX_BUILDS ?? 2),
   idleMs: 5 * 60 * 1000,
 };

@@ -608,6 +608,63 @@ describe("keeping a busy app within its means", () => {
   }, 30_000);
 });
 
+describe("builds side by side", () => {
+  it("runs as many builds at once as it's allowed, and no more", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "computah-side-"));
+    const run = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    run("init", "-q", "-b", "trunk");
+    run("config", "user.email", "test@example.invalid");
+    run("config", "user.name", "Test");
+    run("config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, "page.txt"), "hello\n");
+    writeFileSync(join(dir, "server.js"), SERVER);
+    writeFileSync(join(dir, ".gitignore"), "built.txt\nlog.txt\n");
+    run("add", "-A");
+    run("commit", "-qm", "start");
+    const log = join(dir, "log.txt");
+    const busy = new Site({
+      cwd: dir,
+      agent: {
+        name: "quick",
+        command: (prompt) => {
+          const text = /<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "";
+          return { command: "bash", args: ["-c", `echo "$1" >> page.txt; echo "RESULT ok"`, "x", text] };
+        },
+        parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+      },
+      // Each build notes when it starts and stops, and takes long enough that they'd overlap.
+      app: { build: `echo start >> "${log}"; sleep 0.5; cp page.txt built.txt; echo end >> "${log}"`, start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: "everyone" },
+      guests: { secret: "s" },
+      maxBuilds: 2,
+    });
+    await busy.init();
+    try {
+      writeFileSync(log, "");
+      const guests = ["a", "b", "c", "d"].map((name) => ({ id: `guest:${name}`, name: "guest" }));
+      const jobs = await Promise.all(guests.map((guest) => busy.submit(guest, `from ${guest.id}`, {})));
+      for (const [at, guest] of guests.entries()) {
+        for (let i = 0; i < 800; i++) {
+          if (!["queued", "working"].includes(busy.find(guest, jobs[at]?.id ?? "").job.state)) break;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        expect(busy.find(guest, jobs[at]?.id ?? "").job.state).toBe("done");
+      }
+      let now = 0;
+      let most = 0;
+      for (const mark of readFileSync(log, "utf8").trim().split("\n")) {
+        now += mark === "start" ? 1 : -1;
+        most = Math.max(most, now);
+      }
+      expect(most).toBe(2);
+    } finally {
+      busy.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe("a live copy sees requests as its own", () => {
   it("rewrites host, origin and referer, and leaves other sites' values alone", () => {
     expect(asLocal("host", "app.example", 4000, "app.example")).toBe("localhost:4000");

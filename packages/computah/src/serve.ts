@@ -35,6 +35,8 @@ export interface Config {
   guests?: { secret: string; forgetMs?: number; keep?: number };
   /** The most agents working at once, across everyone. Default 6. */
   maxAgents?: number;
+  /** The most builds running at once. Default 1; 2 suits a machine with 8 or more CPUs. */
+  maxBuilds?: number;
   /** The most personal copies running at once. */
   maxCopies?: number;
 }
@@ -70,6 +72,7 @@ export async function serveSite(argv: string[]): Promise<never> {
     guests: config.guests,
     maxCopies: config.maxCopies,
     maxAgents: config.maxAgents,
+    maxBuilds: config.maxBuilds,
   });
   const port = Number(values.port ?? config.port ?? 8000);
   const host = config.host ?? "0.0.0.0";
