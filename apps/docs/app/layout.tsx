@@ -5,7 +5,15 @@ import { stack } from "@/lib/source";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://computah.sh"),
   title: { default: "computah", template: "%s · computah" },
+  // What a link to this site looks like when it's pasted somewhere.
+  openGraph: {
+    siteName: "computah",
+    type: "website",
+    images: [{ url: "/card.png", width: 1200, height: 630, alt: "computah: make this app better" }],
+  },
+  twitter: { card: "summary_large_image", creator: "@tetraslam", images: ["/card.png"] },
   description:
     "a little window you put in your app. you type what should be different and an agent you already have edits the code while you watch",
 };

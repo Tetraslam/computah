@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { Changes } from "./changes";
 import { Code } from "./code";
-import { Contents, Recording } from "./home";
+import { Contents, Post, Recording } from "./home";
 import { Playground } from "./playground";
 
 /** A boxed aside with its label knocked out of a dithered strip. Used for what isn't done yet. */
@@ -35,6 +35,7 @@ export const mdxComponents: MDXComponents = {
   Changes,
   Contents,
   Recording,
+  Post,
   Playground,
 };
 

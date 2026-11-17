@@ -579,6 +579,40 @@ body {
   margin-top: 10px;
 }
 
+/* ---------- a post quoted from somewhere else ---------- */
+
+.post {
+  margin: 18px 0;
+  border: 1px solid #000;
+  box-shadow: 2px 2px 0 #000;
+  background: #fff;
+}
+.post-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #000;
+  font: 12px / 1.4 var(--font-ui);
+}
+.post-words {
+  margin: 0;
+  padding: 2px 14px 4px;
+  border: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.post-words p {
+  margin: 10px 0;
+}
+.post-more {
+  display: block;
+  padding: 6px 12px 7px;
+  border-top: 1px dotted #000;
+  font: 12px / 1.4 var(--font-ui);
+}
+
 /* ---------- the card's bottom edge: where you are in the stack ---------- */
 
 .card-nav {
