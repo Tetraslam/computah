@@ -27,6 +27,7 @@ export function Desk({ cards }: { cards: CardEntry[] }) {
   const findButton = useRef<HTMLButtonElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const menuList = useRef<HTMLUListElement>(null);
+  const typed = useRef<{ digits: string; timer: ReturnType<typeof setTimeout> | undefined }>({ digits: "", timer: undefined });
   const index = cards.findIndex((card) => card.url === pathname);
   const previous = index > 0 ? cards[index - 1] : undefined;
   const next = index >= 0 ? cards[index + 1] : undefined;
@@ -76,11 +77,24 @@ export function Desk({ cards }: { cards: CardEntry[] }) {
         event.preventDefault();
         setMenu(false);
         setFinding(true);
+      } else if (/^[0-9]$/.test(event.key)) {
+        // A card's number jumps to it. With more than nine cards a second digit may follow, so "1"
+        // waits a moment for it, while a number that can't grow into another card goes at once.
+        event.preventDefault();
+        if (typed.current.timer) clearTimeout(typed.current.timer);
+        const digits = typed.current.digits + event.key;
+        const jump = () => {
+          typed.current = { digits: "", timer: undefined };
+          const at = Number(digits) - 1;
+          if (at >= 0 && at < cards.length && at !== index) go(cards[at], at > index ? "next" : "previous");
+        };
+        if (Number(digits) * 10 > cards.length || digits.length >= 2) jump();
+        else typed.current = { digits, timer: setTimeout(jump, 450) };
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [finding, menu, next, previous, go]);
+  }, [finding, menu, next, previous, go, cards, index]);
 
   // The contents menu closes on any click outside it.
   useEffect(() => {

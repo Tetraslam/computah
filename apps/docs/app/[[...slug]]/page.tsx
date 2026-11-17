@@ -32,6 +32,7 @@ export default async function CardPage(props: PageProps<"/[[...slug]]">) {
               </li>
             ))}
           </ol>
+          <p className="stack-hint">type a card's number to jump to it</p>
         </nav>
       )}
       <article className={home ? "card home" : "card"}>
