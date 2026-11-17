@@ -55,7 +55,7 @@ export default {
   sandbox: process.env.COMPUTAH_SANDBOX === "exe" ? { in: exeSandbox(), warm: { max: 3 } } : undefined,
   // Each running copy is about 100 MB of memory, and each agent is one sandbox machine.
   maxCopies: 12,
-  maxAgents: 6,
+  maxAgents: Number(process.env.COMPUTAH_MAX_AGENTS ?? 24),
   // One build uses about four CPUs, and the machine has eight.
   maxBuilds: Number(process.env.COMPUTAH_MAX_BUILDS ?? 2),
   idleMs: 5 * 60 * 1000,
