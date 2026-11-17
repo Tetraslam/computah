@@ -93,9 +93,10 @@ export async function serveSite(argv: string[]): Promise<never> {
   server.listen(port, host, () => console.log(`computah: serving on http://${host}:${port}, changes by ${agent.name}`));
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
-      site.stop();
+      // Give sandboxes that were kept ready a few seconds to be thrown away: they cost money while they exist.
+      const stopped = site.stop().catch(() => {});
       server.close();
-      setTimeout(() => process.exit(0), 300);
+      void Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 8000))]).then(() => setTimeout(() => process.exit(0), 300));
     });
   }
   return new Promise<never>(() => {});

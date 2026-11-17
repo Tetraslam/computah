@@ -166,7 +166,7 @@ export class Site {
   private agents = { running: 0, waiting: [] as (() => void)[] };
   /** Compiled pieces by the hash of their source, which is also the name the page asks for. */
   private compiled = new Map<string, string>();
-  private sandbox: (Sandbox & { hint?: () => void; stop?: () => void }) | undefined;
+  private sandbox: (Sandbox & { hint?: () => void; stop?: () => Promise<void> }) | undefined;
   /** When each person last had a sandbox readied for them. */
   private hinted = new Map<string, number>();
 
@@ -200,6 +200,8 @@ export class Site {
       this.own.set(id, version);
     }
     if (!this.push) await this.ensureRelease(this.main);
+    // Sandboxes from a run that was cut short would otherwise sit there, some of them costing money.
+    void this.sandbox?.sweep?.().catch(() => {});
     void this.tidy();
     // Everyone's version may have moved while the runner was down (a deploy, say): bring people's own versions up to it.
     void this.spread();
@@ -1002,14 +1004,15 @@ export class Site {
     return this.find(person, id).version.lane;
   }
 
-  stop() {
+  /** Stop every copy of the app. The promise resolves once sandboxes kept ready have been thrown away too. */
+  stop(): Promise<void> {
     if (this.reaper) clearInterval(this.reaper);
     for (const version of [this.main, ...this.own.values()]) {
       version?.live?.process.stop();
       version?.release?.process.stop();
     }
     for (const process of this.copies.values()) process.stop();
-    this.sandbox?.stop?.();
+    return this.sandbox?.stop?.() ?? Promise.resolve();
   }
 }
 

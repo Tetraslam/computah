@@ -46,6 +46,8 @@ i set it up this way so it costs nothing while nobody is on the site. a sandbox 
 
 `min: 1` would make the very first person faster too, but then one is running day and night, which on exe is about $2.50 a day. i left it at 0
 
+ready ones are deleted when the runner shuts down, and any that got left behind anyway are swept up when it starts again
+
 each sandbox is still used for one request and thrown away. this works with any sandbox, including your own
 
 ## exeSandbox
@@ -57,7 +59,7 @@ made and deleted over ssh. the stock image has claude code, codex and opencode, 
 | `egress` | `"integrations"` | `"integrations"` reaches only exe.dev's own services like the model gateway, `"all"` the whole internet |
 | `setup` | points claude code and codex at exe's gateway | shell commands run once in a new sandbox, before the code goes in |
 | `ssh` | | extra arguments for every ssh call, like `["-i", "/path/to/key"]` |
-| `prefix` | `"computah-sbx"` | the start of each sandbox's name |
+| `prefix` | `"computah-sbx-"` and a few characters of this runner's own | the start of each sandbox's name. two runners on one account get different ones, so neither deletes the other's |
 
 ## modalSandbox
 
@@ -103,6 +105,8 @@ const mine: Sandbox = {
 ```
 
 the runner does the rest through `exec` (unpacking, running the agent, reading the patch back), so the machine needs `sh`, `tar`, `base64`, `git` and your agent
+
+if your sandboxes cost money while they exist, also give it a `sweep()` that deletes any this runner left behind. the runner calls it when it starts, cause a runner that gets killed mid-request can't clean up after itself. `exeSandbox` has one, and it only touches sandboxes with its own runner's name on them
 
 ## what's untested
 

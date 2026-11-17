@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { hostname } from "node:os";
 import { createInterface } from "node:readline";
 import { AppError } from "./app.js";
 import type { AgentCommand } from "./types.js";
@@ -11,6 +12,11 @@ import type { AgentCommand } from "./types.js";
 export interface Sandbox {
   name: string;
   open(): Promise<SandboxSession>;
+  /**
+   * Throw away sandboxes this runner left behind, if it was stopped before it could close them.
+   * Called when the runner starts. A sandbox that bills by the second should have one.
+   */
+  sweep?(): Promise<void>;
 }
 
 export interface ExecOptions {
@@ -43,7 +49,7 @@ export interface WarmOptions {
  * Keep sandboxes ready ahead of the requests that will use them, so a request doesn't wait for
  * one to start. `hint()` says a request is probably coming. Each sandbox is still used once.
  */
-export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { hint(): void; stop(): void } {
+export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { hint(): void; stop(): Promise<void> } {
   const max = Math.max(1, options.max ?? 2);
   const min = Math.min(max, options.min ?? 0);
   const idleMs = options.idleMs ?? 90_000;
@@ -54,7 +60,7 @@ export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { h
     clearTimeout(entry.timer);
     const at = ready.indexOf(entry);
     if (at !== -1) ready.splice(at, 1);
-    void entry.session.then((session) => session.close()).catch(() => {});
+    return entry.session.then((session) => session.close()).catch(() => {});
   };
   const start = () => {
     if (stopped || ready.length >= max) return;
@@ -62,14 +68,14 @@ export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { h
     const entry: Entry = {
       session,
       timer: setTimeout(() => {
-        discard(entry);
+        void discard(entry);
         fill();
       }, idleMs),
     };
     entry.timer.unref();
     ready.push(entry);
     // One that failed to start is dropped without retrying at once, so a provider that's down isn't hammered.
-    session.catch(() => discard(entry));
+    session.catch(() => void discard(entry));
   };
   const fill = () => {
     while (!stopped && ready.length < min) start();
@@ -77,6 +83,7 @@ export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { h
   fill();
   return {
     name: sandbox.name,
+    sweep: sandbox.sweep && (() => sandbox.sweep?.() ?? Promise.resolve()),
     hint: start,
     async open() {
       const entry = ready.shift();
@@ -86,9 +93,10 @@ export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { h
       // If the one that was being readied failed, start a fresh one the ordinary way.
       return entry.session.catch(() => sandbox.open());
     },
-    stop() {
+    /** Resolves once every ready sandbox has been thrown away. */
+    async stop() {
       stopped = true;
-      for (const entry of [...ready]) discard(entry);
+      await Promise.all([...ready].map(discard));
     },
   };
 }
@@ -140,7 +148,10 @@ export interface ExeSandboxOptions {
   setup?: string[];
   /** Extra arguments for every ssh call, for example ["-i", "/path/to/key"]. */
   ssh?: string[];
-  /** Prefix for sandbox names. Default "computah-sbx". */
+  /**
+   * Prefix for sandbox names. Default "computah-sbx" plus a few characters that are this
+   * runner's own, so two runners on one account never touch each other's sandboxes.
+   */
   prefix?: string;
 }
 
@@ -158,10 +169,24 @@ export const EXE_GATEWAY_SETUP = [
  */
 export function exeSandbox(options: ExeSandboxOptions = {}): Sandbox {
   const base = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", ...(options.ssh ?? [])];
+  const prefix = options.prefix ?? `computah-sbx-${createHash("sha1").update(`${hostname()}:${process.cwd()}`).digest("hex").slice(0, 6)}`;
   return {
     name: "exe",
+    async sweep() {
+      const listed = await ssh([...base, "exe.dev", "ls", "--json"]);
+      if (listed.code !== 0) return;
+      let names: string[] = [];
+      try {
+        names = (JSON.parse(listed.stdout) as { vms?: { vm_name?: string }[] }).vms?.map((vm) => vm.vm_name ?? "") ?? [];
+      } catch {
+        return;
+      }
+      // Only names this runner makes: its prefix, a dash, and eight hex characters.
+      const mine = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-[0-9a-f]{8}$`);
+      await Promise.all(names.filter((name) => mine.test(name)).map((name) => ssh([...base, "exe.dev", "rm", name])));
+    },
     async open() {
-      const name = `${options.prefix ?? "computah-sbx"}-${randomBytes(4).toString("hex")}`;
+      const name = `${prefix}-${randomBytes(4).toString("hex")}`;
       const made = await ssh([
         ...base,
         "exe.dev",
