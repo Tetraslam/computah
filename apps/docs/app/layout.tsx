@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: "computah",
     type: "website",
-    images: [{ url: "/card.png", width: 1200, height: 630, alt: "computah: make this app better" }],
+    images: [{ url: "/preview.png", width: 1200, height: 630, alt: "computah: make this app better" }],
   },
-  twitter: { card: "summary_large_image", creator: "@tetraslam", images: ["/card.png"] },
+  twitter: { card: "summary_large_image", creator: "@tetraslam", images: ["/preview.png"] },
   description:
     "a little window you put in your app. you type what should be different and an agent you already have edits the code while you watch",
 };

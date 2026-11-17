@@ -3,8 +3,9 @@ import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { Changes } from "./changes";
 import { Code } from "./code";
-import { Contents, Post, Recording } from "./home";
+import { Contents, Recording } from "./home";
 import { Playground } from "./playground";
+import { Post } from "./post";
 
 /** A boxed aside with its label knocked out of a dithered strip. Used for what isn't done yet. */
 function Note({ title = "note", children }: { title?: string; children: ReactNode }) {
