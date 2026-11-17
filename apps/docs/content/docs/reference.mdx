@@ -67,6 +67,7 @@ for `computah serve`, `--config` is the config file, `--port` overrides the conf
 | `sandbox` | none | run the agent in a [sandbox](/sandboxes). below |
 | `guests` | none | let people who aren't signed in take part as [guests](/guests). below |
 | `maxCopies` | no limit | personal copies running at once, one more stops the oldest-used |
+| `pieces` | none | globs of files that each hold one browser-only component importing only `react`. a version that only changed those is swapped into everyone's build and never built. see [letting anyone change it](/guests) |
 | `maxAgents` | `6` | agents working at once across everyone, the rest wait their turn |
 | `maxBuilds` | `1` | builds running at once. one next build uses about 4 cpus, so `2` is right for a machine with 8, and on mine 3 was no faster than 2 |
 
@@ -113,6 +114,7 @@ each command runs in a shell in the app's folder, with `PORT` set
 | field | default | |
 | --- | --- | --- |
 | `in` | required | a `Sandbox`: `exeSandbox()`, `modalSandbox()`, or [your own](/sandboxes) |
+| `warm` | off | `{ max, idleMs, min }`: start a sandbox when someone opens the box so it's ready when they send. see [sandboxes](/sandboxes) |
 | `for` | `"members"` | `"members"`: everyone who isn't owner or trusted. `"everyone"`: every request |
 
 ### `guests`

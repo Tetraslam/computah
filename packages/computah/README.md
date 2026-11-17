@@ -194,17 +194,29 @@ export default {
     memberDailyLimit: 10,
     dailyLimit: 200,
   },
-  sandbox: { in: exeSandbox() },
-  maxCopies: 6,
+  // A guest's version of one of these is swapped into the running build. Nothing is rebuilt for them.
+  pieces: ["app/playground/*.tsx"],
+  // A sandbox is started when someone opens the box, so it's ready by the time they've typed.
+  sandbox: { in: exeSandbox(), warm: { max: 3 } },
 };
 ```
+
+Render each piece through `<Piece>`, which shows the person's own version of it if they have one:
+
+```tsx
+import { Piece } from "@tetraslam13/computah";
+
+<Piece file="app/playground/counter.tsx" stock={Counter} />;
+```
+
+With `pieces`, a guest's change is compiled by itself in milliseconds and appears on the page they're on, with no build and no reload. On the docs site, six guests asking at the same moment all had their change in 9 to 15 seconds; building the app for each of them took 27 to 56.
 
 What keeps this safe:
 
 - **A guest's code never runs on your server.** Load each changeable piece with `next/dynamic` and `ssr: false`, from a wrapper outside `memberPaths`. `clientOnly()` rejects a change that stops being a client component, declares server code, or imports anything but `react`.
 - **A guest's code runs only in their own browser.** Their changes live in their own version until an owner promotes one.
 - **A guest's agent sees only a copy of the code.** With a sandbox it runs on a throwaway machine, without your ignored files.
-- **Costs are capped.** Per-person and whole-app daily limits, a cap on running copies, and forgotten guests are cleaned up.
+- **Costs are capped.** Per-person and whole-app daily limits, a cap on agents running at once, and forgotten guests are cleaned up.
 
 ## Sandboxes
 

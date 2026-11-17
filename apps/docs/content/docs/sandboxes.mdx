@@ -28,6 +28,26 @@ the code gets copied in without your ignored files (so no `.env`), the agent wor
 
 on exe a real claude code change took 12 seconds end to end, about 5 of it starting the vm. on modal the first sandbox took 113 seconds building the image and 2 seconds after that
 
+## keeping one ready
+
+starting the machine is the slow part (about 5 seconds on exe), and the person is sitting there typing for longer than that anyway. so with `warm` the runner starts a sandbox when someone opens the box, and their request gets that one when they send it:
+
+```js
+sandbox: { in: exeSandbox(), warm: { max: 3 } },
+```
+
+| option | default | |
+| --- | --- | --- |
+| `max` | `2` | the most sandboxes sitting ready at once |
+| `idleMs` | 90 seconds | a ready one nobody used for this long gets thrown away |
+| `min` | `0` | keep this many ready all the time, whether anyone's around or not |
+
+i set it up this way so it costs nothing while nobody is on the site. a sandbox only exists from the moment someone opens the box until their request is done, or for 90 seconds if they never ask. on exe that's $0.105 an hour for the default size, so someone who opens the box and wanders off costs about a quarter of a cent, and the worst a person could do by opening it over and over is keep `max` of them alive
+
+`min: 1` would make the very first person faster too, but then one is running day and night, which on exe is about $2.50 a day. i left it at 0
+
+each sandbox is still used for one request and thrown away. this works with any sandbox, including your own
+
 ## exeSandbox
 
 made and deleted over ssh. the stock image has claude code, codex and opencode, and by default it uses exe.dev's model gateway so no model keys go in
