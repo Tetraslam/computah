@@ -31,7 +31,8 @@ export default {
   },
   identity: process.env.COMPUTAH_IDENTITY === "exe" ? "exe" : "local",
   // Without a guest secret the pieces stay read-only for everyone but owners and trusted people.
-  guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000 } : undefined,
+  // A guest's version is about 95 MB of build on disk, so only the most recent ones are kept.
+  guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000, keep: 40 } : undefined,
   trust: {
     owners: list(process.env.COMPUTAH_OWNERS ?? "you"),
     trusted: list(process.env.COMPUTAH_TRUSTED),
@@ -44,10 +45,12 @@ export default {
     memberRules:
       'Each of those files is one self-contained piece of a page. It must keep "use client" as its first line, export a default React component that takes no props, and import nothing except react. Change only the piece that belongs to the page they were on (the file is named after the page; the home page is home.tsx).',
     memberDailyLimit: 12,
-    dailyLimit: 150,
+    dailyLimit: Number(process.env.COMPUTAH_DAILY_LIMIT ?? 150),
   },
   // A visitor's request is worked on in a throwaway machine that has a copy of the code and nothing else.
   sandbox: process.env.COMPUTAH_SANDBOX === "exe" ? { in: exeSandbox() } : undefined,
-  maxCopies: 5,
+  // Each running copy is about 100 MB of memory, and each agent is one sandbox machine.
+  maxCopies: 12,
+  maxAgents: 6,
   idleMs: 5 * 60 * 1000,
 };

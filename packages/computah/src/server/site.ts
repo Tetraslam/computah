@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
 import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
@@ -31,7 +31,9 @@ export interface SiteOptions {
    * is a member like any other, so `trust.members` must be "everyone" for them to do anything.
    * `forgetMs` removes a guest's version once they've been away that long.
    */
-  guests?: { secret: string; forgetMs?: number };
+  guests?: { secret: string; forgetMs?: number; keep?: number };
+  /** The most agents working at once, across everyone. The rest wait their turn. Default 6. */
+  maxAgents?: number;
   /** The most personal copies running at once. Starting one more stops the least recently used. Default: no limit. */
   maxCopies?: number;
   /**
@@ -127,6 +129,10 @@ export class Site {
   /** Every running copy by a random name, so a page keeps talking to the copy that served it. */
   private copies = new Map<string, AppProcess>();
   private identity: Promise<NodeJS.ProcessEnv> | null = null;
+  private lingering = new Set<string>();
+  private tidying = false;
+  /** How many agents are running right now, and who is waiting for a turn. */
+  private agents = { running: 0, waiting: [] as (() => void)[] };
 
   constructor(private options: SiteOptions) {
     this.agentName = options.agent.name;
@@ -156,6 +162,7 @@ export class Site {
       this.own.set(id, version);
     }
     if (!this.push) await this.ensureRelease(this.main);
+    void this.tidy();
     // Everyone's version may have moved while the runner was down (a deploy, say): bring people's own versions up to it.
     void this.spread();
     this.reaper = setInterval(() => this.reap(), 30_000);
@@ -408,11 +415,48 @@ export class Site {
     this.own.delete(version.id);
     version.live?.process.stop();
     version.release?.process.stop();
-    if (version.release) await this.git(this.root, ["worktree", "remove", "--force", version.release.dir]).catch(() => "");
     await this.git(this.root, ["worktree", "remove", "--force", version.workDir]).catch(() => "");
     await this.git(this.root, ["branch", "-D", version.branch]).catch(() => "");
     if (this.push) await this.git(this.root, ["push", this.push.remote ?? "origin", "--delete", version.branch]).catch(() => "");
     await this.savePeople();
+    await this.tidy();
+  }
+
+  /**
+   * Delete builds nothing needs any more. A build is kept if it's a version's latest commit, is
+   * running, or was replaced so recently that open pages may still be fetching from it.
+   */
+  private async tidy() {
+    if (this.push || this.tidying) return;
+    this.tidying = true;
+    try {
+      const folder = join(this.root, DATA, "releases");
+      const keep = new Set(this.lingering);
+      for (const version of [this.main, ...this.own.values()]) {
+        if (!version) continue;
+        if (version.release) keep.add(version.release.dir);
+        keep.add(this.releaseDir(version, await this.head(version).catch(() => "")));
+      }
+      for (const name of await readdir(folder).catch(() => [] as string[])) {
+        const dir = join(folder, name);
+        if (keep.has(dir)) continue;
+        await this.git(this.root, ["worktree", "remove", "--force", dir]).catch(() => "");
+        await rm(dir, { recursive: true, force: true }).catch(() => {});
+      }
+      await this.git(this.root, ["worktree", "prune"]).catch(() => "");
+    } finally {
+      this.tidying = false;
+    }
+  }
+
+  /** Keep at most `guests.keep` guest versions, forgetting whoever was here longest ago. */
+  private trimGuests() {
+    const limit = this.options.guests?.keep;
+    if (limit === undefined) return;
+    const guests = [...this.own.values()].filter((version) => version.person?.id.startsWith("guest:")).sort((a, b) => a.usedAt - b.usedAt);
+    for (const version of guests.slice(0, Math.max(0, guests.length - limit))) {
+      if (!version.lane.busy && !version.building) void this.remove(version);
+    }
   }
 
   /** Bring everyone's latest into each person's own version, where it merges cleanly. */
@@ -558,6 +602,7 @@ export class Site {
       check: (job, files) => (this.level(job.by ?? null) === "member" ? (this.options.trust.memberCheck?.(files) ?? null) : null),
       onStart: (job) => void this.startLive(version, job),
       sandbox: (job) => this.sandboxFor(job),
+      turn: (run) => this.takeTurn(run),
       verify: (job) => this.afterChange(version, job),
       repairs: this.options.repairs,
       // In push mode the failed commits already reached the remote, so their reverts must follow them.
@@ -570,6 +615,19 @@ export class Site {
     });
     await version.lane.init();
     return version;
+  }
+
+  /** Run something that uses an agent, at most `maxAgents` at a time across every version. */
+  private async takeTurn<T>(run: () => Promise<T>): Promise<T> {
+    const limit = this.options.maxAgents ?? 6;
+    if (this.agents.running >= limit) await new Promise<void>((resolve) => this.agents.waiting.push(resolve));
+    this.agents.running++;
+    try {
+      return await run();
+    } finally {
+      this.agents.running--;
+      this.agents.waiting.shift()?.();
+    }
   }
 
   private sandboxFor(job: Job): Sandbox | undefined {
@@ -725,9 +783,11 @@ export class Site {
     version.release = { sha, dir, process };
     if (old) {
       // Pages already open were served by the old copy and still fetch from it, so it lingers before stopping.
+      if (old.dir !== dir) this.lingering.add(old.dir);
       setTimeout(() => {
         old.process.stop();
-        if (old.dir !== dir) void this.git(this.root, ["worktree", "remove", "--force", old.dir]).catch(() => "");
+        this.lingering.delete(old.dir);
+        void this.tidy();
       }, this.options.lingerMs ?? 120_000).unref();
     }
   }
@@ -744,6 +804,8 @@ export class Site {
 
   /** Stop copies nobody is using. Everyone's version always stays up. */
   private reap() {
+    this.trimGuests();
+    void this.tidy();
     const idle = this.options.idleMs ?? 20 * 60_000;
     const now = Date.now();
     for (const version of [this.main, ...this.own.values()]) {

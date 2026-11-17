@@ -534,6 +534,80 @@ describe("guests and pieces that are theirs to change", () => {
   });
 });
 
+describe("keeping a busy app within its means", () => {
+  it("deletes builds nothing needs, runs a limited number of agents at once, and forgets the oldest guests", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "computah-means-"));
+    const run = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    run("init", "-q", "-b", "trunk");
+    run("config", "user.email", "test@example.invalid");
+    run("config", "user.name", "Test");
+    run("config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, "page.txt"), "hello\n");
+    writeFileSync(join(dir, "server.js"), SERVER);
+    writeFileSync(join(dir, ".gitignore"), "built.txt\nlog.txt\n");
+    run("add", "-A");
+    run("commit", "-qm", "start");
+    const log = join(dir, "log.txt");
+    const busy = new Site({
+      cwd: dir,
+      // Each agent notes when it starts and stops, in a file outside any checkout's history.
+      agent: {
+        name: "clocked",
+        command: (prompt) => {
+          const text = /<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "";
+          return {
+            command: "bash",
+            args: ["-c", `echo start >> "$2"; sleep 0.4; echo "$1" >> page.txt; echo end >> "$2"; echo "RESULT ok"`, "x", text, log],
+          };
+        },
+        parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+      },
+      app: { build: "cp page.txt built.txt", start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: "everyone" },
+      guests: { secret: "s", keep: 2 },
+      maxAgents: 1,
+      lingerMs: 50,
+    });
+    await busy.init();
+    try {
+      const wait = async (person: { id: string }, id: string) => {
+        for (let i = 0; i < 600; i++) {
+          const { job } = busy.find(person, id);
+          if (!["queued", "working"].includes(job.state)) return job;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error("never settled");
+      };
+      // Three guests ask at the same moment. With one agent allowed, they never overlap.
+      const guests = ["a", "b", "c"].map((name) => ({ id: `guest:${name}`, name: "guest" }));
+      const jobs = await Promise.all(guests.map((guest) => busy.submit(guest, `from ${guest.id}`, {})));
+      for (const [at, guest] of guests.entries()) expect((await wait(guest, jobs[at]?.id ?? "")).state).toBe("done");
+      const marks = readFileSync(log, "utf8").trim().split("\n");
+      expect(marks).toEqual(["start", "end", "start", "end", "start", "end"]);
+
+      // A second change for one of them replaces its build; the old one is deleted once nothing can be using it.
+      const again = await busy.submit(guests[2] as { id: string }, "more", {});
+      await wait(guests[2] as { id: string }, again.id);
+      // Only two guests are kept: the one who was here longest ago is forgotten on the next sweep.
+      (busy as unknown as { reap(): void }).reap();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const builds = execFileSync("ls", [join(dir, ".computah/releases")], { encoding: "utf8" })
+        .trim()
+        .split("\n");
+      const kept = execFileSync("ls", [join(dir, ".computah/work")], { encoding: "utf8" })
+        .trim()
+        .split("\n");
+      expect(kept.filter((name) => name.startsWith("guest")).length).toBe(2);
+      // One build each for everyone's version and the two guests left. Nothing else is lying around.
+      expect(builds).toHaveLength(3);
+    } finally {
+      busy.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe("a live copy sees requests as its own", () => {
   it("rewrites host, origin and referer, and leaves other sites' values alone", () => {
     expect(asLocal("host", "app.example", 4000, "app.example")).toBe("localhost:4000");

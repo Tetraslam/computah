@@ -46,6 +46,8 @@ export interface ComputahOptions {
    * it was deleted), return why the change isn't acceptable, or null. An objection rolls the job back.
    */
   check?: (job: Job, files: ChangedFile[]) => string | null | Promise<string | null>;
+  /** Wraps every agent run, so a caller can limit how many run at once across checkouts. */
+  turn?: <T>(run: () => Promise<T>) => Promise<T>;
   /** Where to run the agent for a job, other than on this machine. Return nothing to run it here. */
   sandbox?: (job: Job) => Sandbox | undefined;
   /** Called when a job starts working. */
@@ -101,6 +103,8 @@ export class Computah {
     id: string;
     child: ChildProcess | null;
     cancelled: boolean;
+    /** True while this job holds one of the shared agent slots. */
+    inTurn?: boolean;
     /** Stops an agent that is running somewhere else. */
     away?: () => Promise<void>;
   } | null = null;
@@ -505,6 +509,19 @@ export class Computah {
     args: string[],
     stdin: string | undefined,
   ): Promise<{ summary: string; failed?: string }> {
+    const turn = this.options.turn;
+    if (turn && !current.inTurn) {
+      // Agents are a shared resource: wait for a free one, and say so if it takes a moment.
+      current.inTurn = true;
+      const note = setTimeout(() => void this.emit(job.id, { type: "tool", name: "queue", detail: "waiting for a free agent" }), 1500);
+      return turn(() => {
+        clearTimeout(note);
+        return this.runAgent(job, current, command, args, stdin);
+      }).finally(() => {
+        clearTimeout(note);
+        current.inTurn = false;
+      });
+    }
     const sandbox = this.options.sandbox?.(job);
     if (sandbox) return this.runAway(job, current, sandbox, { command, args, stdin });
     return new Promise((resolve) => {

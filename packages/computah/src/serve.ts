@@ -32,7 +32,9 @@ export interface Config {
   repairs?: number /** Run the agent in a sandbox: `{ in: exeSandbox() }`, for members only unless `for: "everyone"`. */;
   sandbox?: { in: Sandbox; for?: "members" | "everyone" };
   /** Let people who aren't signed in take part as guests. Needs `trust.members: "everyone"`. */
-  guests?: { secret: string; forgetMs?: number };
+  guests?: { secret: string; forgetMs?: number; keep?: number };
+  /** The most agents working at once, across everyone. Default 6. */
+  maxAgents?: number;
   /** The most personal copies running at once. */
   maxCopies?: number;
 }
@@ -67,6 +69,7 @@ export async function serveSite(argv: string[]): Promise<never> {
     sandbox: config.sandbox,
     guests: config.guests,
     maxCopies: config.maxCopies,
+    maxAgents: config.maxAgents,
   });
   const port = Number(values.port ?? config.port ?? 8000);
   const host = config.host ?? "0.0.0.0";

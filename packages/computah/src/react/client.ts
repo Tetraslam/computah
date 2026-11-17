@@ -215,6 +215,8 @@ export function activityLabel(event: JobEvent | undefined): string {
   if (event.type === "text") return "thinking";
   if (event.type === "error") return "hit a problem";
   if (event.type === "release") return event.state === "building" ? "building it" : event.state === "live" ? "live" : "didn't build";
+  if (event.name === "queue") return "waiting for a free agent";
+  if (event.name === "sandbox") return "getting a sandbox";
   const name = event.name.toLowerCase();
   const file = event.detail?.split("/").pop();
   if (/edit|write|patch|create/.test(name)) return file ? `editing ${file}` : "editing";
