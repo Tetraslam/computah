@@ -2,7 +2,7 @@
 // The site is a computah app itself. Its owner changes anything by typing into its box.
 // Everyone else, signed in or not, can change the framed pieces in apps/docs/playground,
 // each in a version only they see.
-import { clientOnly, exeSandbox } from "./packages/computah/dist/server/index.js";
+import { clientOnly, codex, exeSandbox } from "./packages/computah/dist/server/index.js";
 
 const list = (value) =>
   (value ?? "")
@@ -11,8 +11,15 @@ const list = (value) =>
     .filter(Boolean);
 const guestSecret = process.env.COMPUTAH_GUEST_SECRET;
 
+// OpenAI's faster service tier ("fast"), which codex takes as a config override. Other agents ignore it.
+const tier = process.env.COMPUTAH_SERVICE_TIER;
+const agent =
+  process.env.COMPUTAH_AGENT === "codex" && tier
+    ? codex({ model: process.env.COMPUTAH_MODEL, args: ["-c", `service_tier="${tier}"`] })
+    : process.env.COMPUTAH_AGENT;
+
 export default {
-  agent: process.env.COMPUTAH_AGENT,
+  agent,
   model: process.env.COMPUTAH_MODEL,
   port: Number(process.env.PORT ?? 8000),
   app: {
