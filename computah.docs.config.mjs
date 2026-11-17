@@ -43,7 +43,7 @@ export default {
     memberCheck: clientOnly(),
     memberNote: "you can change the framed parts of each page. only you see your version.",
     memberRules:
-      'Each of those files is one self-contained piece of a page. It must keep "use client" as its first line, export a default React component that takes no props, and import nothing except react. Change only the piece that belongs to the page they were on (the file is named after the page; the home page is home.tsx). Just edit the file and say what you did: there is nothing here to lint, type check, build or run it with, so don't try.',
+      'Each of those files is one self-contained piece of a page. It must keep "use client" as its first line, export a default React component that takes no props, and import nothing except react. Change only the piece that belongs to the page they were on (the file is named after the page; the home page is home.tsx). Just edit the file and say what you did: there is nothing here to lint, type check, build or run it with, so do not try.',
     memberDailyLimit: 12,
     dailyLimit: Number(process.env.COMPUTAH_DAILY_LIMIT ?? 150),
   },
