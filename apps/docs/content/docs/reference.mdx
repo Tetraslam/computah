@@ -67,6 +67,8 @@ for `computah serve`, `--config` is the config file, `--port` overrides the conf
 | `sandbox` | none | run the agent in a [sandbox](/sandboxes). below |
 | `guests` | none | let people who aren't signed in take part as [guests](/guests). below |
 | `maxCopies` | no limit | personal copies running at once, one more stops the oldest-used |
+| `maxAgents` | `6` | agents working at once across everyone, the rest wait their turn |
+| `maxBuilds` | `1` | builds running at once. one next build uses about 4 cpus, so `2` is right for a machine with 8, and on mine 3 was no faster than 2 |
 
 ### `app`
 

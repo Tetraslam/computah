@@ -360,7 +360,9 @@ export class Site {
 
   async undo(person: Person | null, id: string) {
     const { version } = this.find(person, id, true);
-    if (version.lane.busy || version.building) throw new RequestError("Wait for the change in progress to finish first.", 409);
+    // A build that's under way is seconds from done, so wait for it instead of refusing.
+    if (version.building) await version.building.catch(() => {});
+    if (version.lane.busy) throw new RequestError("Wait for the change in progress to finish first.", 409);
     const undone = await version.lane.undo(id);
     await this.release(version).catch(() => {});
     if (version === this.main) void this.spread();

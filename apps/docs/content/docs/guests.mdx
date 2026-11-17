@@ -36,6 +36,8 @@ export default {
 | `members: "everyone"` | required, otherwise a guest is a visitor and can't do anything |
 | `memberCheck: clientOnly()` | refuses a change that stops being a client component (`"use client"` first), declares server code, or imports anything but `react`. `clientOnly({ imports: ["react", "..."] })` lets more through |
 | `maxCopies` | personal copies running at once, and one more stops whichever was used longest ago |
+| `maxAgents`, `maxBuilds` | how many agents and builds run at once. when a bunch of people ask at the same moment the build is the line they wait in, so if the machine has the cpus, `maxBuilds: 2` about halves it |
+| `guests.keep` | only this many guest versions are kept, the oldest-used go first, so the disk can't fill up |
 
 `memberPaths`, `memberNote`, `memberRules` and the limits work like for any member ([people and trust](/people-and-trust)), and `sandbox` is on [sandboxes](/sandboxes)
 
