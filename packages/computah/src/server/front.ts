@@ -128,6 +128,18 @@ async function api(site: Site, person: Person | null, path: string, request: Inc
   if (method === "GET" && (first === undefined || first === "me")) {
     return send(response, 200, { name: "computah", ...(await site.me(person, wantsMain(request))) });
   }
+  if (first === "pieces" && method === "GET") {
+    if (!id) return send(response, 200, { pieces: await site.pieces(person, wantsMain(request)) });
+    const script = site.piece(id.replace(/\.js$/, ""));
+    if (script === undefined) return send(response, 404, { error: "Not found." });
+    // A piece is named after its contents, so it never changes and can be kept forever.
+    response.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" });
+    return void response.end(script);
+  }
+  if (first === "warm" && method === "POST") {
+    site.warm(person);
+    return send(response, 200, { ok: true });
+  }
   if (first === "hello" && method === "POST") {
     // Someone not signed in asks to take part: they become a guest, if this app has guests.
     const cookie = person ? null : site.welcome();

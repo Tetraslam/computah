@@ -86,6 +86,8 @@ export function createClient(options: ClientOptions = {}) {
   return {
     info: () => call<Info>("/"),
     hello: () => call<{ ok: boolean; guest: boolean }>("/hello", {}),
+    /** Say that a request is probably coming, so the runner can get ready for it. */
+    warm: () => call<{ ok: boolean }>("/warm", {}),
     view: (version: "main" | "mine") => call<{ ok: boolean }>("/view", { version }),
     promote: (id: string) => call<{ ok: boolean }>(`/versions/${id}/promote`, {}),
     discard: (id: string) => call<{ ok: boolean }>(`/versions/${id}/discard`, {}),

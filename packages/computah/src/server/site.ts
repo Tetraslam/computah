@@ -5,10 +5,22 @@ import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
 import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
-import { GUEST_COOKIE, guestFrom, guestToken, type Identity, type Level, levelOf, type Person, slugFor, type Trust } from "./identity.js";
+import {
+  GUEST_COOKIE,
+  globToRegExp,
+  guestFrom,
+  guestToken,
+  type Identity,
+  type Level,
+  levelOf,
+  type Person,
+  slugFor,
+  type Trust,
+} from "./identity.js";
 import { Computah, RequestError } from "./jobs.js";
+import { compilePiece } from "./pieces.js";
 import { buildMergePrompt } from "./prompt.js";
-import type { Sandbox } from "./sandbox.js";
+import { type Sandbox, type WarmOptions, warm } from "./sandbox.js";
 import type { Agent, Job, JobContext } from "./types.js";
 
 export interface SiteOptions {
@@ -33,6 +45,13 @@ export interface SiteOptions {
    */
   guests?: { secret: string; forgetMs?: number; keep?: number };
   /**
+   * Files that each hold one browser-only React component importing nothing but react, as globs,
+   * for example ["src/pieces/*.tsx"]. When a person's version differs from everyone's only in
+   * files like these, it isn't built or run at all: each changed file is compiled by itself in
+   * milliseconds and the page swaps it into everyone's build. The app renders them with `<Piece>`.
+   */
+  pieces?: string[];
+  /**
    * The most builds running at once. Default 1. A build uses a few CPUs by itself, so 2 suits a
    * machine with 8 or more, and more than that rarely helps.
    */
@@ -45,7 +64,7 @@ export interface SiteOptions {
    * Run the agent away from this machine, on a copy of the code. `for: "members"` (the default)
    * sandboxes only people who aren't owners or trusted; `"everyone"` sandboxes every request.
    */
-  sandbox?: { in: Sandbox; for?: "members" | "everyone" };
+  sandbox?: { in: Sandbox; for?: "members" | "everyone"; warm?: WarmOptions };
   /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
   lingerMs?: number;
   /**
@@ -81,6 +100,12 @@ interface Version {
   lane: Computah;
   release?: Release;
   building?: Promise<void>;
+  /**
+   * Set when this version is served as everyone's build plus its own pieces: the commit that was
+   * checked, and each changed piece's file and compiled script. Null when it needs a build of its
+   * own, undefined when nobody has looked yet.
+   */
+  pieces?: { sha: string; files: Record<string, string> } | null;
   /** A hot-reloading copy the person who asked watches while their change is made. */
   live?: { process: AppProcess; for: string; usedAt: number };
   usedAt: number;
@@ -139,9 +164,16 @@ export class Site {
   private tidying = false;
   /** How many agents are running right now, and who is waiting for a turn. */
   private agents = { running: 0, waiting: [] as (() => void)[] };
+  /** Compiled pieces by the hash of their source, which is also the name the page asks for. */
+  private compiled = new Map<string, string>();
+  private sandbox: (Sandbox & { hint?: () => void; stop?: () => void }) | undefined;
+  /** When each person last had a sandbox readied for them. */
+  private hinted = new Map<string, number>();
 
   constructor(private options: SiteOptions) {
     this.agentName = options.agent.name;
+    const rule = options.sandbox;
+    this.sandbox = rule && (rule.warm ? warm(rule.in, rule.warm) : rule.in);
   }
 
   private git(cwd: string, args: string[]) {
@@ -243,6 +275,11 @@ export class Site {
       version.live.usedAt = Date.now();
       return { port: version.live.process.port, live: true, copy: this.name(version.live.process) };
     }
+    if (version !== this.main && this.options.pieces?.length) {
+      if (version.pieces === undefined && !version.building) await this.swapPieces(version).catch(() => false);
+      // Their version is everyone's build plus a few pieces of their own, which the page fetches for itself.
+      if (version.pieces) return this.target(null);
+    }
     if (!version.release || version.release.process.exited) {
       // If their copy still has to be built, don't make them wait for it: show everyone's version
       // meanwhile. The box tells them, and moves them over when theirs is ready.
@@ -294,7 +331,8 @@ export class Site {
       stale: !!mine?.stale,
       mode: this.push ? "push" : "swap",
       canJoin: !person && !!this.options.guests,
-      waiting: !!mine && !wantsMain && !this.push && (!mine.release || mine.release.process.exited) && !this.isLive(mine, person),
+      waiting:
+        !!mine && !wantsMain && !this.push && !mine.pieces && (!mine.release || mine.release.process.exited) && !this.isLive(mine, person),
       note: level === "member" ? this.options.trust.memberNote : undefined,
       ownUrl: mine?.url,
       proposals,
@@ -309,6 +347,7 @@ export class Site {
     const personal = level === "member" || scope === "me";
     if (level === "member") this.count(person);
     const version = personal ? await this.ownVersion(person) : this.main;
+    this.hinted.delete(person.id);
     return version.lane.submit(text, context, { by: person, version: version.id });
   }
 
@@ -363,8 +402,10 @@ export class Site {
     // A build that's under way is seconds from done, so wait for it instead of refusing.
     if (version.building) await version.building.catch(() => {});
     if (version.lane.busy) throw new RequestError("Wait for the change in progress to finish first.", 409);
+    const own = !!version.release && !version.release.process.exited;
     const undone = await version.lane.undo(id);
     await this.release(version).catch(() => {});
+    undone.inPlace = !!version.pieces && !own;
     if (version === this.main) void this.spread();
     return undone;
   }
@@ -641,7 +682,100 @@ export class Site {
   private sandboxFor(job: Job): Sandbox | undefined {
     const rule = this.options.sandbox;
     if (!rule) return undefined;
-    return rule.for === "everyone" || this.level(job.by ?? null) === "member" ? rule.in : undefined;
+    return rule.for === "everyone" || this.level(job.by ?? null) === "member" ? this.sandbox : undefined;
+  }
+
+  /**
+   * Someone has opened the box and is probably about to ask for something. If their request
+   * would run in a sandbox, start getting one ready now, so it's there by the time they've typed.
+   */
+  warm(person: Person | null) {
+    const level = this.level(person);
+    if (!person || level === "visitor" || !this.sandbox?.hint) return;
+    if (this.options.sandbox?.for !== "everyone" && level !== "member") return;
+    // One per person until they use it, so opening and closing the box doesn't pile sandboxes up.
+    const last = this.hinted.get(person.id) ?? 0;
+    const idle = this.options.sandbox?.warm?.idleMs ?? 90_000;
+    if (Date.now() - last < idle) return;
+    if (this.hinted.size > 10_000) this.hinted.clear();
+    this.hinted.set(person.id, Date.now());
+    this.sandbox.hint();
+  }
+
+  // ---------- pieces ----------
+
+  /**
+   * The pieces this version changed, if those are all it changed: each file with the name of its
+   * compiled script. Null when the version changed anything else, and so needs a build of its own.
+   * Throws when a piece doesn't parse, as a build would.
+   */
+  private async piecesOf(version: Version, sha: string): Promise<Record<string, string> | null> {
+    const globs = this.options.pieces;
+    if (!globs?.length || version === this.main || this.push) return null;
+    const matchers = globs.map(globToRegExp);
+    // What this version changed since it last had everyone's version in it.
+    const base = (await this.git(this.root, ["merge-base", MAIN, sha])).trim();
+    const changed = (await this.git(this.root, ["diff", "--name-status", "--no-renames", "-z", base, sha])).split("\0").filter(Boolean);
+    const files: Record<string, string> = {};
+    for (let at = 0; at + 1 < changed.length; at += 2) {
+      const [status, file] = [changed[at] as string, changed[at + 1] as string];
+      if ((status !== "M" && status !== "A") || !matchers.some((matcher) => matcher.test(file))) return null;
+      const id = (await this.git(this.root, ["rev-parse", `${sha}:${file}`])).trim();
+      if (!this.compiled.has(id)) {
+        const script = compilePiece(id, file, await this.git(this.root, ["show", `${sha}:${file}`]));
+        if (script === null) return null;
+        this.compiled.set(id, script);
+        // Scripts are tiny, but a busy app sees a lot of them: forget the oldest.
+        if (this.compiled.size > 5000) this.compiled.delete(this.compiled.keys().next().value as string);
+      }
+      files[file] = id;
+    }
+    return files;
+  }
+
+  /**
+   * Serve this version as everyone's build plus its own pieces, if it can be. True when it is,
+   * in which case nothing was built and nothing needs to be.
+   */
+  private async swapPieces(version: Version, at?: string): Promise<boolean> {
+    if (!this.options.pieces?.length || version === this.main || this.push) return false;
+    const sha = at ?? (await this.head(version));
+    const files = await this.piecesOf(version, sha);
+    if (!files) {
+      version.pieces = null;
+      return false;
+    }
+    version.pieces = { sha, files };
+    // It may have had a build of its own before (say its one bigger change was undone). That copy isn't needed now.
+    if (version.release) this.retire(version.release);
+    version.release = undefined;
+    return true;
+  }
+
+  /** The pieces of their own this person's page should swap in: file to script name. */
+  async pieces(person: Person | null, wantsMain = false): Promise<Record<string, string>> {
+    const version = this.versionFor(person, wantsMain);
+    if (version === this.main || !this.options.pieces?.length) return {};
+    // A change that just finished may still be on its way in.
+    if (version.building) await version.building.catch(() => {});
+    if (version.pieces === undefined) await this.swapPieces(version).catch(() => false);
+    version.usedAt = Date.now();
+    return version.pieces?.files ?? {};
+  }
+
+  /** A compiled piece by name. */
+  piece(id: string): string | undefined {
+    return this.compiled.get(id);
+  }
+
+  /** Stop a copy that was replaced, once pages still open on it have had time to move on. */
+  private retire(old: Release, replacedBy?: string) {
+    if (old.dir !== replacedBy) this.lingering.add(old.dir);
+    setTimeout(() => {
+      old.process.stop();
+      this.lingering.delete(old.dir);
+      void this.tidy();
+    }, this.options.lingerMs ?? 120_000).unref();
   }
 
   /** While a change is being made, run a hot-reloading copy for the person who asked. */
@@ -650,6 +784,15 @@ export class Site {
     // A live copy is reached through the runner's front door, which push mode doesn't have.
     // A sandboxed agent's changes arrive all at once at the end, so there is nothing to watch live.
     if (!app.dev || !job.by || this.push || this.sandboxFor(job)) return;
+    // Someone who can only change pieces sees the change swapped into the page they're on. No copy needed.
+    const { pieces, trust } = this.options;
+    if (
+      pieces?.length &&
+      this.level(job.by) === "member" &&
+      trust.memberPaths?.length &&
+      trust.memberPaths.every((path) => pieces.includes(path))
+    )
+      return;
     if (version.live && !version.live.process.exited) {
       version.live.for = job.by.id;
       version.live.usedAt = Date.now();
@@ -678,6 +821,7 @@ export class Site {
   private async afterChange(version: Version, job: Job): Promise<string | null> {
     if (!job.commit) return "The change couldn't be saved.";
     await version.lane.noteRelease(job.id, "building");
+    const own = !!version.release && !version.release.process.exited;
     try {
       await this.release(version);
     } catch (error) {
@@ -687,6 +831,8 @@ export class Site {
       return error instanceof Error ? error.message : String(error);
     }
     job.url = version === this.main ? undefined : version.url;
+    // The page they're on came from everyone's build and stays on it: only their pieces changed.
+    job.inPlace = !!version.pieces && !own;
     await version.lane.noteRelease(job.id, "live");
     if (version === this.main) void this.spread();
     return null;
@@ -701,9 +847,11 @@ export class Site {
    * Run a build in its turn: after any build this version already has going, and with at most
    * `maxBuilds` running across every version.
    */
-  private inLine<T>(version: Version, run: () => Promise<T>): Promise<T> {
+  private inLine<T>(version: Version, run: () => Promise<T>, at?: string): Promise<T | undefined> {
     const earlier = (version.building ?? Promise.resolve()).catch(() => {});
     return earlier.then(async () => {
+      // A version that only changed pieces needs no build, so it doesn't wait behind any either.
+      if (await this.swapPieces(version, at)) return undefined;
       const limit = Math.max(1, this.options.maxBuilds ?? 1);
       if (this.builds.running >= limit) await new Promise<void>((resolve) => this.builds.waiting.push(resolve));
       else this.builds.running++;
@@ -720,7 +868,7 @@ export class Site {
 
   /** Build the version's latest commit and swap it in. */
   private release(version: Version, sha?: string): Promise<void> {
-    const building = this.inLine(version, () => this.build(version, sha)).finally(() => {
+    const building = this.inLine(version, () => this.build(version, sha), sha).finally(() => {
       if (version.building === building) version.building = undefined;
     });
     version.building = building;
@@ -806,15 +954,8 @@ export class Site {
     const process = await AppProcess.start(app.start, appDir(dir, app), app);
     const old = version.release;
     version.release = { sha, dir, process };
-    if (old) {
-      // Pages already open were served by the old copy and still fetch from it, so it lingers before stopping.
-      if (old.dir !== dir) this.lingering.add(old.dir);
-      setTimeout(() => {
-        old.process.stop();
-        this.lingering.delete(old.dir);
-        void this.tidy();
-      }, this.options.lingerMs ?? 120_000).unref();
-    }
+    // Pages already open were served by the old copy and still fetch from it, so it lingers before stopping.
+    if (old) this.retire(old, dir);
   }
 
   /** Before starting a person's copy, stop the least recently used ones if too many are running. */
@@ -867,6 +1008,7 @@ export class Site {
       version?.release?.process.stop();
     }
     for (const process of this.copies.values()) process.stop();
+    this.sandbox?.stop?.();
   }
 }
 

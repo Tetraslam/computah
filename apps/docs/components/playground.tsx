@@ -1,12 +1,14 @@
 "use client";
 
+import { Piece } from "@tetraslam13/computah";
 import dynamic from "next/dynamic";
 import { Component, type ComponentType, type CSSProperties, type ReactNode } from "react";
 
 /**
  * The parts of this site a visitor may change. Each piece is one file in `playground/`, loaded only in
  * the browser so a visitor's change can never break the server render. The map is static on purpose:
- * no computed import paths. `sizes` is the space kept for each piece before it loads, so nothing shifts.
+ * no computed import paths. Each is shown through `<Piece>`, which is how a visitor's version of one
+ * reaches their page without this site being rebuilt for them. `sizes` is the space kept for each piece before it loads, so nothing shifts.
  */
 type Size = { wide: number; narrow: number };
 
@@ -66,7 +68,6 @@ class Catch extends Component<{ children: ReactNode; size: Size }, { broken: boo
 }
 
 export function Playground({ name }: { name: PieceName }) {
-  const Piece = pieces[name];
   return (
     <section className="yours" aria-label="yours to change">
       <header className="titlebar">
@@ -75,7 +76,8 @@ export function Playground({ name }: { name: PieceName }) {
       <div className="yours-body">
         <Catch size={sizes[name]}>
           <div className="reserve" style={reserve(sizes[name])}>
-            <Piece />
+            {/* a visitor's own version of the piece, if they have one, is swapped in here without a rebuild */}
+            <Piece file={`apps/docs/playground/${name}.tsx`} stock={pieces[name]} />
           </div>
         </Catch>
       </div>

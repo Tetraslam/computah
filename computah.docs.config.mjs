@@ -31,8 +31,8 @@ export default {
   },
   identity: process.env.COMPUTAH_IDENTITY === "exe" ? "exe" : "local",
   // Without a guest secret the pieces stay read-only for everyone but owners and trusted people.
-  // A guest's version is about 95 MB of build on disk, so only the most recent ones are kept.
-  guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000, keep: 40 } : undefined,
+  // A guest's version is a few MB of git checkout and no build, so a lot of them can be kept.
+  guests: guestSecret ? { secret: guestSecret, forgetMs: 24 * 60 * 60 * 1000, keep: 500 } : undefined,
   trust: {
     owners: list(process.env.COMPUTAH_OWNERS ?? "you"),
     trusted: list(process.env.COMPUTAH_TRUSTED),
@@ -47,8 +47,12 @@ export default {
     memberDailyLimit: 12,
     dailyLimit: Number(process.env.COMPUTAH_DAILY_LIMIT ?? 150),
   },
+  // The framed pieces are swapped into the running build, so a visitor's change needs no build of its own.
+  pieces: ["apps/docs/playground/*.tsx"],
   // A visitor's request is worked on in a throwaway machine that has a copy of the code and nothing else.
-  sandbox: process.env.COMPUTAH_SANDBOX === "exe" ? { in: exeSandbox() } : undefined,
+  // One is started when someone opens the box, so it's ready by the time they've typed, and is
+  // thrown away after 90 seconds if they never ask. Nothing runs while nobody is around.
+  sandbox: process.env.COMPUTAH_SANDBOX === "exe" ? { in: exeSandbox(), warm: { max: 3 } } : undefined,
   // Each running copy is about 100 MB of memory, and each agent is one sandbox machine.
   maxCopies: 12,
   maxAgents: 6,

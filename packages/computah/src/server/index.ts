@@ -20,6 +20,8 @@ export {
   modalSandbox,
   type Sandbox,
   type SandboxSession,
+  type WarmOptions,
+  warm,
 } from "./sandbox.js";
 export type { PushOptions } from "./site.js";
 export { type Me, Site, type SiteOptions } from "./site.js";

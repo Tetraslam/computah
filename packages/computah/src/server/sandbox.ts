@@ -27,6 +27,72 @@ export interface SandboxSession {
   close(): Promise<void>;
 }
 
+export interface WarmOptions {
+  /** The most sandboxes kept ready at once. Default 2. */
+  max?: number;
+  /** A ready sandbox that nobody used for this long is thrown away. Default 90 seconds. */
+  idleMs?: number;
+  /**
+   * Keep this many ready at all times, asked for or not. Default 0, which costs nothing while
+   * nobody is around: a sandbox is only started when someone opens the box.
+   */
+  min?: number;
+}
+
+/**
+ * Keep sandboxes ready ahead of the requests that will use them, so a request doesn't wait for
+ * one to start. `hint()` says a request is probably coming. Each sandbox is still used once.
+ */
+export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { hint(): void; stop(): void } {
+  const max = Math.max(1, options.max ?? 2);
+  const min = Math.min(max, options.min ?? 0);
+  const idleMs = options.idleMs ?? 90_000;
+  type Entry = { session: Promise<SandboxSession>; timer: NodeJS.Timeout };
+  const ready: Entry[] = [];
+  let stopped = false;
+  const discard = (entry: Entry) => {
+    clearTimeout(entry.timer);
+    const at = ready.indexOf(entry);
+    if (at !== -1) ready.splice(at, 1);
+    void entry.session.then((session) => session.close()).catch(() => {});
+  };
+  const start = () => {
+    if (stopped || ready.length >= max) return;
+    const session = sandbox.open();
+    const entry: Entry = {
+      session,
+      timer: setTimeout(() => {
+        discard(entry);
+        fill();
+      }, idleMs),
+    };
+    entry.timer.unref();
+    ready.push(entry);
+    // One that failed to start is dropped without retrying at once, so a provider that's down isn't hammered.
+    session.catch(() => discard(entry));
+  };
+  const fill = () => {
+    while (!stopped && ready.length < min) start();
+  };
+  fill();
+  return {
+    name: sandbox.name,
+    hint: start,
+    async open() {
+      const entry = ready.shift();
+      if (!entry) return sandbox.open();
+      clearTimeout(entry.timer);
+      fill();
+      // If the one that was being readied failed, start a fresh one the ordinary way.
+      return entry.session.catch(() => sandbox.open());
+    },
+    stop() {
+      stopped = true;
+      for (const entry of [...ready]) discard(entry);
+    },
+  };
+}
+
 /** Where the copy lives in the sandbox. Quoted wherever it is used, since $HOME is expanded there. */
 const WORK = '"$HOME/computah-work"';
 
@@ -127,8 +193,10 @@ export function exeSandbox(options: ExeSandboxOptions = {}): Sandbox {
         },
       };
       try {
-        for (const line of options.setup ?? EXE_GATEWAY_SETUP) {
-          const step = await session.exec(["sh", "-c", line]);
+        // One connection for all of it: each ssh call costs most of a second.
+        const setup = options.setup ?? EXE_GATEWAY_SETUP;
+        if (setup.length) {
+          const step = await session.exec(["sh", "-c", setup.map((line) => `{ ${line}\n}`).join(" && ")]);
           if (step.code !== 0) throw new AppError(`Sandbox setup failed. ${step.stderr.trim().split("\n").pop() ?? ""}`, true);
         }
       } catch (error) {

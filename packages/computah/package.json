@@ -35,9 +35,9 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
+    "modal": ">=0.11",
     "react": ">=18",
-    "react-dom": ">=18",
-    "modal": ">=0.11"
+    "react-dom": ">=18"
   },
   "devDependencies": {
     "@types/node": "latest",
@@ -70,5 +70,8 @@
     "modal": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "sucrase": "^3.35.1"
   }
 }

@@ -45,6 +45,8 @@ export interface Job {
   /** Where the change is on its way to being served. Absent in development, where saving is releasing. */
   release?: "building" | "live" | "failed";
   releaseError?: string;
+  /** True when the change was swapped into the page's own build, so the page shows it without loading again. */
+  inPlace?: boolean;
   /** Where the change can be seen, when it's served at an address of its own. */
   url?: string;
 }
@@ -54,7 +56,7 @@ export type JobEventBody =
   | { type: "text"; text: string }
   | { type: "tool"; name: string; detail?: string }
   | { type: "error"; message: string }
-  | { type: "release"; state: "building" | "live" | "failed"; message?: string };
+  | { type: "release"; state: "building" | "live" | "failed"; message?: string; inPlace?: boolean };
 
 export type JobEvent = JobEventBody & { seq: number; at: number };
 

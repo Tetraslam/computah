@@ -12,4 +12,5 @@ export {
   RunnerError,
   SERVED_ENDPOINT,
 } from "./client.js";
+export { Piece, type PieceProps, refreshPieces } from "./Piece.js";
 export { type BoxJob, type BoxOptions, type Connection, useBox } from "./use-box.js";

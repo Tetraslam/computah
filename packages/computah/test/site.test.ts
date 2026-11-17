@@ -665,6 +665,115 @@ describe("builds side by side", () => {
   }, 30_000);
 });
 
+describe("pieces", () => {
+  it("swaps a changed piece into everyone's build without building anything, and builds when it has to", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "computah-pieces-"));
+    const run = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    run("init", "-q", "-b", "trunk");
+    run("config", "user.email", "test@example.invalid");
+    run("config", "user.name", "Test");
+    run("config", "commit.gpgsign", "false");
+    const piece = (words: string, extra = "") =>
+      `"use client";\nimport { useState } from "react";\n${extra}export default function A() {\n  const [n] = useState(0);\n  return <p>${words} {n}</p>;\n}\n`;
+    writeFileSync(join(dir, "page.txt"), "hello\n");
+    writeFileSync(join(dir, "server.js"), SERVER);
+    writeFileSync(join(dir, ".gitignore"), "built.txt\nlog.txt\n");
+    execFileSync("mkdir", [join(dir, "pieces")]);
+    writeFileSync(join(dir, "pieces/a.tsx"), piece("stock"));
+    run("add", "-A");
+    run("commit", "-qm", "start");
+    const log = join(dir, "log.txt");
+    const site = new Site({
+      cwd: dir,
+      // The request says what to write: a new piece, a piece that imports something, a broken one, or a change elsewhere.
+      agent: {
+        name: "scripted",
+        command: (prompt) => {
+          const text = /<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "";
+          const [kind, words = ""] = text.split(":");
+          const body =
+            kind === "piece"
+              ? piece(words)
+              : kind === "import"
+                ? piece(`${words} {String(x)}`, 'import x from "left-pad";\n')
+                : kind === "broken"
+                  ? "export default function A() { return <p>; }\n"
+                  : "";
+          const script = body ? `printf '%s' "$1" > pieces/a.tsx` : `echo "$2" >> page.txt`;
+          return { command: "bash", args: ["-c", `${script}; echo "RESULT ok"`, "x", body, words] };
+        },
+        parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+      },
+      app: { build: `echo build >> "${log}"; cp page.txt built.txt`, start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: "everyone" },
+      guests: { secret: "s" },
+      pieces: ["pieces/*.tsx"],
+      repairs: 0,
+    });
+    await site.init();
+    try {
+      const builds = () => readFileSync(log, "utf8").trim().split("\n").length;
+      const ask = async (person: { id: string }, text: string) => {
+        const { id } = await site.submit(person, text, {});
+        for (let i = 0; i < 800; i++) {
+          const { job } = site.find(person, id);
+          if (!["queued", "working"].includes(job.state)) return job;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error("never settled");
+      };
+      const everyone = (await site.target(null)).port;
+      expect(builds()).toBe(1);
+
+      // A guest changes the piece. Nothing is built, they stay on everyone's copy, and their piece is there to fetch.
+      const ann = { id: "guest:ann", name: "guest" };
+      const first = await ask(ann, "piece:ann was here");
+      expect(first.state).toBe("done");
+      expect(first.inPlace).toBe(true);
+      expect(builds()).toBe(1);
+      expect((await site.target(ann)).port).toBe(everyone);
+      const mine = await site.pieces(ann);
+      expect(Object.keys(mine)).toEqual(["pieces/a.tsx"]);
+      expect(site.piece(mine["pieces/a.tsx"] as string)).toContain("ann was here");
+      expect((await site.me(ann)).waiting).toBe(false);
+      // Nobody else has it.
+      expect(await site.pieces(null)).toEqual({});
+      expect(await site.pieces({ id: "guest:bob", name: "guest" })).toEqual({});
+
+      // A piece that doesn't parse fails like a build would, and theirs stays as it was.
+      const broken = await ask(ann, "broken:");
+      expect(broken.state).toBe("failed");
+      expect(await site.pieces(ann)).toEqual(mine);
+
+      // Undoing it puts them back on the stock piece, still without a build.
+      const undone = await site.undo(ann, first.id);
+      expect(undone.inPlace).toBe(true);
+      expect(await site.pieces(ann)).toEqual({});
+      expect(builds()).toBe(1);
+
+      // A piece that imports something the page can't provide gets a real build instead.
+      const cat = { id: "guest:cat", name: "guest" };
+      const imported = await ask(cat, "import:with a friend");
+      expect(imported.state).toBe("done");
+      expect(imported.inPlace).toBeFalsy();
+      expect(builds()).toBe(2);
+      expect(await site.pieces(cat)).toEqual({});
+      expect((await site.target(cat)).port).not.toBe(everyone);
+
+      // So does a change to anything that isn't a piece.
+      const dan = { id: "guest:dan", name: "guest" };
+      const elsewhere = await ask(dan, "page:more");
+      expect(elsewhere.state).toBe("done");
+      expect(builds()).toBe(3);
+      expect((await site.target(dan)).port).not.toBe(everyone);
+    } finally {
+      site.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe("a live copy sees requests as its own", () => {
   it("rewrites host, origin and referer, and leaves other sites' values alone", () => {
     expect(asLocal("host", "app.example", 4000, "app.example")).toBe("localhost:4000");

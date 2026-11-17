@@ -11,6 +11,7 @@ import {
   RunnerError,
   SERVED_ENDPOINT,
 } from "./client.js";
+import { refreshPieces } from "./Piece.js";
 
 export type Connection = "connecting" | "ready" | "offline" | "refused";
 
@@ -78,7 +79,8 @@ export function useBox(options: BoxOptions) {
               if (job.steps.some((step) => step.seq === event.seq)) return job;
               const steps = [...job.steps, event];
               const state = event.type === "state" ? event.state : job.state;
-              return { ...job, steps, state, activity: activityLabel(event) };
+              const inPlace = event.type === "release" && event.inPlace ? true : job.inPlace;
+              return { ...job, steps, state, inPlace, activity: activityLabel(event) };
             }),
           controller.signal,
         )
@@ -127,6 +129,10 @@ export function useBox(options: BoxOptions) {
     if (!endpoint || (!active && !served)) return;
     void refresh();
   }, [active, served, endpoint, refresh]);
+  // The box was opened, so a request is probably coming: the runner can get a sandbox ready meanwhile.
+  useEffect(() => {
+    if (active && served && connection === "ready") void client.warm().catch(() => {});
+  }, [active, served, connection, client]);
   useEffect(() => {
     if (!active || connection !== "offline") return;
     const timer = setInterval(() => void refresh(), RETRY_MS);
@@ -209,8 +215,11 @@ export function useBox(options: BoxOptions) {
       seen.current.set(job.id, job.state);
       if (before === undefined || before === job.state) continue;
       const settled = job.state === "done" || job.state === "undone" || (job.state === "failed" && before === "working");
+      if (!settled) continue;
+      // A change to a piece is swapped into this page as it is. Nothing to load again.
+      if (job.inPlace) void refreshPieces();
       // A version served at its own address is opened from its link, not by reloading this page.
-      if (settled && !(pushed && job.version !== "main")) reloadOrHold();
+      else if (!(pushed && job.version !== "main")) reloadOrHold();
     }
   }, [jobs, served, pushed, reloadOrHold]);
 

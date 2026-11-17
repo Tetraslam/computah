@@ -188,3 +188,36 @@ describe("who gets sandboxed when the app is served", () => {
     }
   });
 });
+
+describe("sandboxes kept ready", () => {
+  it("starts one when asked, hands it to the next request, and throws away one nobody used", async () => {
+    const { warm } = await import("../src/server/sandbox.js");
+    const pool = warm(elsewhere, { max: 2, idleMs: 150 });
+    try {
+      // Nobody around: nothing is running, nothing is paid for.
+      expect(opened).toBe(0);
+      pool.hint();
+      expect(opened).toBe(1);
+      // The request that follows gets that one, not a new one.
+      const session = await pool.open();
+      expect(opened).toBe(1);
+      await session.close();
+      expect(closed).toBe(1);
+      // With none ready, a request starts its own.
+      await (await pool.open()).close();
+      expect(opened).toBe(2);
+      // Never more ready than the most allowed.
+      pool.hint();
+      pool.hint();
+      pool.hint();
+      expect(opened).toBe(4);
+      // The ones nobody came for are closed after a while.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(closed).toBe(4);
+      await (await pool.open()).close();
+      expect(opened).toBe(5);
+    } finally {
+      pool.stop();
+    }
+  });
+});

@@ -284,7 +284,7 @@ export class Computah {
     job.release = state;
     job.releaseError = state === "failed" ? message : undefined;
     await this.save(job);
-    await this.emit(id, { type: "release", state, message });
+    await this.emit(id, { type: "release", state, message, ...(state === "live" && job.inPlace ? { inPlace: true } : {}) });
   }
 
   /** Mark a job undone without touching files, for a caller that reverted it itself. */
