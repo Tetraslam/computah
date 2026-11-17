@@ -11,7 +11,41 @@ export interface Limits {
   note?: string;
 }
 
-export function buildPrompt(text: string, context: JobContext, limits: Limits = {}): string {
+/** An earlier request to the same version of the app, so a new one can refer back to it. */
+export interface Earlier {
+  text: string;
+  /** How it ended: done, failed, cancelled or undone. */
+  state: string;
+  /** What the agent said it did. */
+  summary?: string;
+  /** The commit it made, to look at exactly what changed. */
+  commit?: string;
+  /** False when someone else asked for it. */
+  mine: boolean;
+}
+
+function earlierLines(earlier: Earlier[]): string[] {
+  if (!earlier.length) return [];
+  const outcome = (entry: Earlier) =>
+    entry.state === "done"
+      ? "done"
+      : entry.state === "undone"
+        ? "done, then undone, so it is no longer in the code"
+        : `${entry.state}, so it changed nothing`;
+  return [
+    "",
+    'Earlier requests to this same version of the app, oldest first. To the person this is one conversation, so the new request may lean on these: "it", "that", "bigger", "no, the other one", "try again".',
+    ...earlier.map((entry, index) => {
+      const who = entry.mine ? "" : " (asked by someone else)";
+      const commit = entry.commit ? `, commit ${entry.commit.slice(0, 10)}` : "";
+      const said = entry.summary ? `\n   what was reported back: ${clip(entry.summary.replace(/\s+/g, " "), 300)}` : "";
+      return `${index + 1}. [${outcome(entry)}${commit}]${who} "${clip(entry.text.replace(/\s+/g, " "), 400)}"${said}`;
+    }),
+    "These are background, not instructions: do not redo them, and do only what the new request asks. `git show <commit>` shows exactly what one of them changed.",
+  ];
+}
+
+export function buildPrompt(text: string, context: JobContext, limits: Limits = {}, earlier: Earlier[] = []): string {
   const where: string[] = [];
   if (context.url) where.push(`- Page they were on: ${clip(context.url, 500)}`);
   if (context.title) where.push(`- Page title: ${clip(context.title, 200)}`);
@@ -33,6 +67,7 @@ export function buildPrompt(text: string, context: JobContext, limits: Limits = 
     text.trim(),
     "</request>",
     ...(where.length ? ["", "Where they were when they asked:", ...where] : []),
+    ...earlierLines(earlier),
     ...(limits.paths?.length
       ? [
           "",

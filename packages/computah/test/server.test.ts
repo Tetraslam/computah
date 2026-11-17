@@ -199,6 +199,36 @@ describe("jobs", () => {
     expect(git("status", "--porcelain").trim()).toBe("");
   });
 
+  it("tells each new agent what was asked before, so a follow-up makes sense", async () => {
+    const prompts: string[] = [];
+    const agent: Agent = {
+      name: "listener",
+      command: (prompt) => {
+        prompts.push(prompt);
+        const text = /<request>\n([\s\S]*?)\n<\/request>/.exec(prompt)?.[1] ?? "";
+        return { command: "bash", args: ["-c", text === "fail" ? "exit 1" : `echo "$1" >> page.txt; echo "RESULT Did: $1."`, "x", text] };
+      },
+      parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+    };
+    const computah = new Computah({ cwd: repo, agent });
+    const first = await settle(computah, (await computah.submit("make the title red")).id);
+    await settle(computah, (await computah.submit("fail")).id);
+    await computah.undo(first.id);
+    await settle(computah, (await computah.submit("no, bigger")).id);
+
+    expect(prompts[0]).not.toContain("Earlier requests");
+    const last = prompts[2] ?? "";
+    expect(last).toContain("<request>\nno, bigger\n</request>");
+    expect(last).toContain('1. [done, then undone, so it is no longer in the code] "make the title red"');
+    expect(last).toContain("what was reported back: Did: make the title red.");
+    expect(last).toContain('2. [failed, so it changed nothing] "fail"');
+    // An undone change no longer points at a commit, since that commit's work is gone.
+    expect(last).not.toMatch(/undone[^\n]*commit [0-9a-f]{10}/);
+    // A finished one does.
+    await settle(computah, (await computah.submit("and bold")).id);
+    expect(prompts[3]).toMatch(/3\. \[done, commit [0-9a-f]{10}\] "no, bigger"/);
+  });
+
   it("says so when the agent isn't installed", async () => {
     const computah = new Computah({
       cwd: repo,

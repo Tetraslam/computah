@@ -233,12 +233,16 @@ export class Site {
     if (!version.release || version.release.process.exited) {
       // If their copy still has to be built, don't make them wait for it: show everyone's version
       // meanwhile. The box tells them, and moves them over when theirs is ready.
-      if (version !== this.main && !(await this.isBuilt(version))) {
+      // The commit is read once and that exact commit is started, so a merge landing in between
+      // can't turn "it's built, start it" into "wait for a build".
+      const sha = version === this.main ? undefined : await this.head(version);
+      if (sha && !existsSync(join(this.releaseDir(version, sha), ".computah-built"))) {
         if (!version.building) void this.ensureRelease(version).catch(() => {});
         return this.target(null);
       }
       try {
-        await this.ensureRelease(version);
+        if (version.building) await version.building;
+        if (!version.release || version.release.process.exited) await this.release(version, sha);
       } catch {
         // A person's own version that won't start falls back to everyone's.
         if (version !== this.main) return this.target(null);
@@ -345,7 +349,7 @@ export class Site {
     const { version, job } = this.find(person, id, true);
     if (version.lane.busy || version.building) throw new RequestError("Wait for the change in progress to finish first.", 409);
     const undone = await version.lane.undo(id);
-    await this.release(version, job.id).catch(() => {});
+    await this.release(version).catch(() => {});
     if (version === this.main) void this.spread();
     return undone;
   }
@@ -628,9 +632,9 @@ export class Site {
   }
 
   /** Build the version's latest commit and swap it in. One build runs at a time. */
-  private release(version: Version, _reason?: string): Promise<void> {
+  private release(version: Version, sha?: string): Promise<void> {
     const building = this.builds
-      .then(() => this.build(version))
+      .then(() => this.build(version, sha))
       .finally(() => {
         if (version.building === building) version.building = undefined;
       });
@@ -700,7 +704,10 @@ export class Site {
   private prebuild(version: Version) {
     const building = this.builds
       .then(async () => {
-        await this.prepare(version, await this.head(version));
+        const sha = await this.head(version);
+        await this.prepare(version, sha);
+        // If they came back meanwhile and are on an older build, move them to this one.
+        if (version.release && !version.release.process.exited && version.release.sha !== sha) await this.build(version, sha);
       })
       .catch(() => {})
       .finally(() => {
@@ -710,10 +717,11 @@ export class Site {
     this.builds = building;
   }
 
-  private async build(version: Version) {
+  /** Build (if needed) and start a commit of this version, by default its latest, and swap it in. */
+  private async build(version: Version, at?: string) {
     if (this.push) return this.pushOut(version, this.push);
     const { app } = this.options;
-    const sha = await this.head(version);
+    const sha = at ?? (await this.head(version));
     if (version.release?.sha === sha && !version.release.process.exited) return;
     const dir = await this.prepare(version, sha);
     this.makeRoom(version);

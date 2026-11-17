@@ -30,7 +30,10 @@ export interface ComputahOptions {
   /** Stop a job that runs longer than this. Default 15 minutes. */
   timeoutMs?: number;
   /** Longest request accepted, in characters. Default 4000. */
-  maxLength?: number /** Where job records are kept. Default `.computah/jobs` in the repo. */;
+  maxLength?: number;
+  /** How many earlier requests the agent is told about, so a follow-up makes sense. Default 8. */
+  remember?: number;
+  /** Where job records are kept. Default `.computah/jobs` in the repo. */
   dataDir?: string;
   /** Extra environment for the agent process. */
   env?: NodeJS.ProcessEnv;
@@ -243,6 +246,26 @@ export class Computah {
     return job;
   }
 
+  /**
+   * The last few requests made in this checkout before `job`, oldest first. Each request runs a
+   * fresh agent, so this is what lets a follow-up ("no, bigger") mean something.
+   */
+  private earlier(job: Job) {
+    return [...this.jobs.values()]
+      .filter(
+        (other) => other.id !== job.id && !other.chore && other.createdAt <= job.createdAt && !["queued", "working"].includes(other.state),
+      )
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-(this.options.remember ?? 8))
+      .map((other) => ({
+        text: other.text,
+        state: other.state,
+        summary: other.summary ?? other.error,
+        commit: other.state === "done" ? other.commit : undefined,
+        mine: !job.by || !other.by || other.by.id === job.by.id,
+      }));
+  }
+
   private async objection(job: Job, files: string[]): Promise<string | null> {
     const changed = await Promise.all(
       files.map(async (path) => ({ path, content: await readFile(join(this.root, path), "utf8").catch(() => null) })),
@@ -364,7 +387,12 @@ export class Computah {
     await this.options.onStart?.(job);
 
     const { command, args, stdin } = this.options.agent.command(
-      buildPrompt(job.text, job.context, { paths: this.options.allowedPaths?.(job), note: this.options.limitsNote?.(job) }),
+      buildPrompt(
+        job.text,
+        job.context,
+        { paths: this.options.allowedPaths?.(job), note: this.options.limitsNote?.(job) },
+        this.earlier(job),
+      ),
       this.root,
     );
     const outcome = await this.runAgent(job, current, command, args, stdin);

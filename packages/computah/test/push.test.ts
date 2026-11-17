@@ -188,7 +188,7 @@ describe("an app its host builds", () => {
     execFileSync("git", ["clone", "-q", remote, other]);
     writeFileSync(join(other, "other.txt"), "theirs\n");
     git(other, "add", "-A");
-    git(other, "-c", "user.email=o@example.invalid", "-c", "user.name=Other", "commit", "-qm", "theirs");
+    git(other, "-c", "user.email=o@example.invalid", "-c", "user.name=Other", "-c", "commit.gpgsign=false", "commit", "-qm", "theirs");
     git(other, "push", "-q", "origin", "main");
     expect((await ask("mine")).release).toBe("live");
     expect(remoteFile("main", "other.txt")).toBe("theirs\n");

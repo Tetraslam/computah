@@ -195,7 +195,7 @@ describe("a served app", () => {
     const main = join(repo, ".computah/work/main");
     writeFileSync(join(main, "deployed.txt"), "deployed\n");
     execFileSync("git", ["add", "-A"], { cwd: main });
-    execFileSync("git", ["commit", "-qm", "deploy"], { cwd: main });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-qm", "deploy"], { cwd: main });
     const again = new Site({
       cwd: repo,
       agent,
@@ -210,14 +210,16 @@ describe("a served app", () => {
     const at = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
     const get = async (path: string) => fetch(`${at}${path}`, { headers: as("mel") });
     try {
-      // Mid-build: mel gets everyone's version at once, and is told theirs is on the way.
+      // Mid-build: mel gets a page at once, never a wait. Depending on how far the catch-up has got,
+      // that's everyone's version (and the box says theirs is on the way) or their own previous build.
       const started = Date.now();
-      expect(await (await get("/")).text()).toBe("hello\ndeployed\n");
+      const first = await (await get("/")).text();
       expect(Date.now() - started).toBeLessThan(600);
-      expect(((await (await get("/__computah/me")).json()) as { waiting: boolean }).waiting).toBe(true);
+      expect(["hello\ndeployed\n", "hello\nfrom mel\n"]).toContain(first);
+      if (first === "hello\ndeployed\n") expect(((await (await get("/__computah/me")).json()) as { waiting: boolean }).waiting).toBe(true);
       // Nobody asked for mel's page again, and it still gets built. Then it's theirs, with both changes.
       for (let i = 0; i < 200; i++) {
-        if ((await (await get("/")).text()).includes("from mel")) break;
+        if ((await (await get("/")).text()) === "hello\nfrom mel\ndeployed\n") break;
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
       expect(await (await get("/")).text()).toBe("hello\nfrom mel\ndeployed\n");
@@ -288,7 +290,7 @@ describe("a served app", () => {
     const main = join(repo, ".computah/work/main");
     writeFileSync(join(main, "deployed.txt"), "new\n");
     execFileSync("git", ["add", "-A"], { cwd: main });
-    execFileSync("git", ["commit", "-qm", "deploy"], { cwd: main });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-qm", "deploy"], { cwd: main });
     const again = new Site({
       cwd: repo,
       agent,
