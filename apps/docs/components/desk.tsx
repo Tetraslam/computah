@@ -191,6 +191,9 @@ export function Desk({ cards }: { cards: CardEntry[] }) {
         <a className="menu-item menu-quiet" href="/llms.txt" title="the whole stack, for agents">
           llms.txt
         </a>
+        <a className="menu-item" href="https://github.com/tetraslam/computah" rel="noreferrer" title="the code, on github">
+          github
+        </a>
       </nav>
       {finding && (
         <Find
