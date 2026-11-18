@@ -6,6 +6,7 @@ import { Code } from "./code";
 import { Contents, Recording } from "./home";
 import { Playground } from "./playground";
 import { Post } from "./post";
+import { Tally } from "./tally";
 
 /** A boxed aside with its label knocked out of a dithered strip. Used for what isn't done yet. */
 function Note({ title = "note", children }: { title?: string; children: ReactNode }) {
@@ -37,6 +38,7 @@ export const mdxComponents: MDXComponents = {
   Contents,
   Recording,
   Post,
+  Tally,
   Playground,
 };
 

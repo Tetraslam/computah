@@ -146,6 +146,7 @@ export interface Me {
 
 const DATA = ".computah";
 const MAIN = "computah/main";
+const DAY = 24 * 60 * 60 * 1000;
 
 /** The app as it's served: its versions, who sees which, and how changes reach them. */
 export class Site {
@@ -165,6 +166,8 @@ export class Site {
   private tidyAgain = false;
   /** How many agents are running right now, and who is waiting for a turn. */
   private agents = { running: 0, waiting: [] as (() => void)[] };
+  /** Changes members have made that went live: how many ever, and when the recent ones landed. */
+  private tally = { total: 0, recent: [] as number[] };
   /** Compiled pieces by the hash of their source, which is also the name the page asks for. */
   private compiled = new Map<string, string>();
   private sandbox: (Sandbox & { hint?: () => void; stop?: () => Promise<void> }) | undefined;
@@ -200,6 +203,8 @@ export class Site {
       version.url = entry.url;
       this.own.set(id, version);
     }
+    const kept = JSON.parse(await readFile(join(this.root, DATA, "tally.json"), "utf8").catch(() => "{}")) as Partial<Site["tally"]>;
+    this.tally = { total: Number(kept.total) || 0, recent: Array.isArray(kept.recent) ? kept.recent.filter(Number.isFinite) : [] };
     if (!this.push) await this.ensureRelease(this.main);
     // Sandboxes from a run that was cut short would otherwise sit there, some of them costing money.
     void this.sandbox?.sweep?.().catch(() => {});
@@ -352,6 +357,20 @@ export class Site {
     const version = personal ? await this.ownVersion(person) : this.main;
     this.hinted.delete(person.id);
     return version.lane.submit(text, context, { by: person, version: version.id });
+  }
+
+  /** A member's change went live. Kept in a file, so the numbers survive a restart. */
+  private async countChange() {
+    const now = Date.now();
+    this.tally.total++;
+    this.tally.recent = [...this.tally.recent.filter((at) => now - at < DAY), now].slice(-50_000);
+    await writeFile(join(this.root, DATA, "tally.json"), JSON.stringify(this.tally)).catch(() => {});
+  }
+
+  /** How many changes members have made, ever and in the last 24 hours. Anyone may ask: it says nothing about who. */
+  stats(): { changes: number; today: number } {
+    const now = Date.now();
+    return { changes: this.tally.total, today: this.tally.recent.filter((at) => now - at < DAY).length };
   }
 
   private count(person: Person) {
@@ -847,6 +866,7 @@ export class Site {
     job.url = version === this.main ? undefined : version.url;
     // The page they're on came from everyone's build and stays on it: only their pieces changed.
     job.inPlace = !!version.pieces && !own;
+    if (this.level(job.by ?? null) === "member") void this.countChange();
     await version.lane.noteRelease(job.id, "live");
     if (version === this.main) void this.spread();
     return null;

@@ -136,6 +136,7 @@ async function api(site: Site, person: Person | null, path: string, request: Inc
     response.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" });
     return void response.end(script);
   }
+  if (first === "stats" && method === "GET") return send(response, 200, site.stats());
   if (first === "warm" && method === "POST") {
     site.warm(person);
     return send(response, 200, { ok: true });

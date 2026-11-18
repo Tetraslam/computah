@@ -813,6 +813,10 @@ describe("pieces", () => {
       expect(elsewhere.state).toBe("done");
       expect(builds()).toBe(3);
       expect((await site.target(dan)).port).not.toBe(everyone);
+
+      // Three changes went live (the broken one didn't), and the count is kept on disk.
+      expect(site.stats()).toEqual({ changes: 3, today: 3 });
+      expect(JSON.parse(readFileSync(join(dir, ".computah/tally.json"), "utf8")).total).toBe(3);
     } finally {
       site.stop();
       rmSync(dir, { recursive: true, force: true });
