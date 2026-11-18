@@ -85,6 +85,11 @@ export interface Trust {
    * it isn't acceptable, or null. See `clientOnly()` for a ready-made one.
    */
   memberCheck?: (files: { path: string; content: string | null }[]) => string | null;
+  /**
+   * Stop a member's request that runs longer than this. Default: the same as everyone's, 15 minutes.
+   * Worth setting for a public app, where it bounds what one request from a stranger can cost.
+   */
+  memberTimeoutMs?: number;
   /** Requests a member may send per day. Default 20. */
   memberDailyLimit?: number;
   /** Requests all members together may send per day. Default: no limit. */

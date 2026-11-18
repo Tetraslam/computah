@@ -28,7 +28,7 @@ export interface ComputahOptions {
   /** Commit each finished change. Skipped for a job that touches files with uncommitted edits. Default true. */
   commit?: boolean;
   /** Stop a job that runs longer than this. Default 15 minutes. */
-  timeoutMs?: number;
+  timeoutMs?: number | ((job: Job) => number | undefined);
   /** Longest request accepted, in characters. Default 4000. */
   maxLength?: number;
   /** How many earlier requests the agent is told about, so a follow-up makes sense. Default 8. */
@@ -275,6 +275,11 @@ export class Computah {
       files.map(async (path) => ({ path, content: await readFile(join(this.root, path), "utf8").catch(() => null) })),
     );
     return (await this.options.check?.(job, changed)) ?? null;
+  }
+
+  private timeoutFor(job: Job): number {
+    const { timeoutMs } = this.options;
+    return (typeof timeoutMs === "function" ? timeoutMs(job) : timeoutMs) ?? 15 * 60_000;
   }
 
   /** Record where a finished job's change is on its way to being served. */
@@ -549,13 +554,10 @@ export class Computah {
         return done(`Couldn't start ${command}.`);
       }
       current.child = child;
-      const timer = setTimeout(
-        () => {
-          agentError = "It took too long and was stopped.";
-          killTree(child);
-        },
-        this.options.timeoutMs ?? 15 * 60_000,
-      );
+      const timer = setTimeout(() => {
+        agentError = "It took too long and was stopped.";
+        killTree(child);
+      }, this.timeoutFor(job));
 
       child.on("error", (error: NodeJS.ErrnoException) =>
         done(error.code === "ENOENT" ? `${command} isn't installed or isn't on the PATH.` : `Couldn't start ${command}.`),
@@ -596,13 +598,10 @@ export class Computah {
     let result = "";
     let agentError = "";
     let session: Awaited<ReturnType<Sandbox["open"]>> | null = null;
-    const timer = setTimeout(
-      () => {
-        agentError = "It took too long and was stopped.";
-        void session?.close();
-      },
-      this.options.timeoutMs ?? 15 * 60_000,
-    );
+    const timer = setTimeout(() => {
+      agentError = "It took too long and was stopped.";
+      void session?.close();
+    }, this.timeoutFor(job));
     try {
       await this.emit(job.id, { type: "tool", name: "sandbox", detail: `starting a ${sandbox.name} sandbox` });
       session = await sandbox.open();

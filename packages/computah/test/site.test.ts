@@ -665,6 +665,52 @@ describe("builds side by side", () => {
   }, 30_000);
 });
 
+describe("a time limit for members", () => {
+  it("stops a member's request that runs too long, and leaves an owner's alone", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "computah-limit-"));
+    const run = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    run("init", "-q", "-b", "trunk");
+    run("config", "user.email", "test@example.invalid");
+    run("config", "user.name", "Test");
+    run("config", "commit.gpgsign", "false");
+    writeFileSync(join(dir, "page.txt"), "hello\n");
+    writeFileSync(join(dir, "server.js"), SERVER);
+    writeFileSync(join(dir, ".gitignore"), "built.txt\n");
+    run("add", "-A");
+    run("commit", "-qm", "start");
+    const slow = new Site({
+      cwd: dir,
+      agent: {
+        name: "slow",
+        command: () => ({ command: "bash", args: ["-c", `sleep 1.2; echo more >> page.txt; echo "RESULT ok"`] }),
+        parse: (line) => (line.startsWith("RESULT ") ? [{ type: "result", text: line.slice(7) }] : []),
+      },
+      app: { build: "cp page.txt built.txt", start: "node server.js" },
+      identity: header("x-user"),
+      trust: { owners: ["olive"], members: ["mel"], memberTimeoutMs: 300 },
+    });
+    await slow.init();
+    try {
+      const ask = async (person: { id: string }) => {
+        const { id } = await slow.submit(person, "more", {});
+        for (let i = 0; i < 800; i++) {
+          const { job } = slow.find(person, id);
+          if (!["queued", "working"].includes(job.state)) return job;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error("never settled");
+      };
+      const members = await ask({ id: "mel" });
+      expect(members.state).toBe("failed");
+      expect(members.error).toContain("took too long");
+      expect((await ask({ id: "olive" })).state).toBe("done");
+    } finally {
+      slow.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe("pieces", () => {
   it("swaps a changed piece into everyone's build without building anything, and builds when it has to", async () => {
     const dir = mkdtempSync(join(tmpdir(), "computah-pieces-"));

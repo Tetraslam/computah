@@ -25,6 +25,8 @@ export interface Config {
   /** Default 0.0.0.0. */
   host?: string;
   idleMs?: number;
+  /** Stop a request that runs longer than this. Default 15 minutes. `trust.memberTimeoutMs` sets a shorter one for members. */
+  timeoutMs?: number;
   agentEnv?: NodeJS.ProcessEnv;
   /** How a change reaches people. Leave out to build and serve on this machine. */
   release?: { push: PushOptions };
@@ -70,6 +72,7 @@ export async function serveSite(argv: string[]): Promise<never> {
     identity,
     trust: config.trust,
     idleMs: config.idleMs,
+    timeoutMs: config.timeoutMs,
     agentEnv: config.agentEnv,
     release: config.release,
     repairs: config.repairs,

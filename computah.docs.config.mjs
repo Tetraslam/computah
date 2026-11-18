@@ -44,6 +44,8 @@ export default {
     memberNote: "you can change the framed parts of each page. only you see your version.",
     memberRules:
       'Each of those files is one self-contained piece of a page. It must keep "use client" as its first line, export a default React component that takes no props, and import nothing except react. Change only the piece that belongs to the page they were on (the file is named after the page; the home page is home.tsx). Just edit the file and say what you did: there is nothing here to lint, type check, build or run it with, so do not try.',
+    // A visitor's change usually takes 10 to 20 seconds. Five minutes leaves room for an ambitious one and still bounds the cost.
+    memberTimeoutMs: 5 * 60 * 1000,
     memberDailyLimit: 12,
     dailyLimit: Number(process.env.COMPUTAH_DAILY_LIMIT ?? 150),
   },

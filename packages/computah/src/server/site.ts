@@ -655,7 +655,8 @@ export class Site {
       cwd: workDir,
       agent: this.options.agent,
       commit: true,
-      timeoutMs: this.options.timeoutMs,
+      timeoutMs: (job) =>
+        (this.level(job.by ?? null) === "member" ? this.options.trust.memberTimeoutMs : undefined) ?? this.options.timeoutMs,
       env: this.options.agentEnv,
       dataDir: join(this.root, DATA, "jobs", id),
       allowedPaths: (job) => (this.level(job.by ?? null) === "member" ? this.options.trust.memberPaths : undefined),

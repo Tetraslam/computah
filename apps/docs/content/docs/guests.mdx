@@ -38,6 +38,7 @@ export default {
 | `memberCheck: clientOnly()` | refuses a change that stops being a client component (`"use client"` first), declares server code, or imports anything but `react`. `clientOnly({ imports: ["react", "..."] })` lets more through |
 | `pieces` | the files a guest's version can swap into the page without the app being built for them. more on this below cause it's the thing that makes guests fast |
 | `sandbox.warm` | starts a sandbox when someone opens the box, so it's already there when they hit send. on [sandboxes](/sandboxes) |
+| `trust.memberTimeoutMs` | stops a guest's request that runs longer than this. the default is 15 minutes, which is a lot of someone else's money to let a stranger spend, so set it. mine is 5 minutes |
 | `maxAgents` | how many agents run at once across everyone, default 6, and the rest wait their turn |
 | `guests.keep` | only this many guest versions are kept, the oldest-used go first, so the disk can't fill up |
 | `maxCopies`, `maxBuilds` | only matter for versions that do need a build of their own: how many of those run at once, and how many builds go side by side |
