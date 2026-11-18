@@ -387,11 +387,14 @@ export class Site {
     this.counts.set("*", { day, sent: total + 1 });
   }
 
-  /** The requests this person may see: everyone's, their own, and for owners all of them. */
+  /** The requests this person may see: their own, everyone's version's if they can change it, and for owners all of them. */
   jobs(person: Person | null): Job[] {
     const level = this.level(person);
     if (!person || level === "visitor") return [];
-    const versions = level === "owner" ? [this.main, ...this.own.values()] : [this.main, this.own.get(slugFor(person))];
+    // A member can't change everyone's version, so its requests aren't theirs to look through either:
+    // on a public app that would be every guest reading what the owner typed.
+    const mine = this.own.get(slugFor(person));
+    const versions = level === "owner" ? [this.main, ...this.own.values()] : level === "trusted" ? [this.main, mine] : [mine];
     return versions
       .flatMap((version) => version?.lane.list() ?? [])
       .sort((a, b) => b.createdAt - a.createdAt)
