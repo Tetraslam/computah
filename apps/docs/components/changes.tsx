@@ -6,7 +6,7 @@ export function Changes() {
   if (!changes.length) {
     return (
       <div className="empty">
-        <p>nothing here yet. the first change someone types into the box will show up here</p>
+        <p>nothing here yet. it fills up when i change the site through the box, or promote something a visitor made</p>
       </div>
     );
   }
