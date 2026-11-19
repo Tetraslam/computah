@@ -10,15 +10,19 @@ import type { Agent } from "./types.js";
  * Sign in with ChatGPT: a person connects their own ChatGPT account, and from then on their
  * requests are made by Codex on their ChatGPT plan instead of on anything the app's owner pays for.
  *
- * OpenAI offers this two ways, and which one applies is theirs to decide, not this library's:
+ * OpenAI offers this two ways:
  * - Open-source and locally hosted apps need nothing from OpenAI. Each person registers a client
- *   of their own on first sign-in. The callback has to be on 127.0.0.1, so the person's browser
- *   must be on the machine the runner is on.
- * - A remotely hosted app needs a client ID that OpenAI issued its owner. Set `clientId`, and the
- *   callback is the app's own address.
+ *   of their own on first sign-in, and the sign-in comes back to 127.0.0.1 on the person's own
+ *   machine. When that's also the runner's machine, the runner receives it. When it isn't, the
+ *   page it lands on can't load, and the person pastes its address into the box to finish.
+ * - An app with a client ID that OpenAI issued its owner sets `clientId`, and the sign-in comes
+ *   back to the app's own address.
+ *
+ * OpenAI's guide points remotely hosted apps to the second. Which one an app may use is between
+ * its owner and OpenAI.
  */
 export interface ChatGPTOptions {
-  /** The OAuth client ID OpenAI issued you. Leave out for the open-source flow, which only works on the runner's own machine. */
+  /** The OAuth client ID OpenAI issued you. Leave out for the open-source flow, where each person registers a client of their own. */
   clientId?: string;
   /** For a confidential client: its secret. Sent only to OpenAI's token endpoint, as HTTP Basic. */
   clientSecret?: string;
@@ -49,6 +53,8 @@ const SCOPES = ["openid", "profile", "email", "offline_access", "resource.invoke
 const DYNAMIC = "dynamic_agent_client";
 /** Where the open-source flow has to come back to. Only the port may differ. */
 export const LOOPBACK_CALLBACK = "/auth/callback";
+/** The port used when the runner isn't on the person's machine, so nothing is expected to answer there. It's the one OpenAI's guide uses. */
+const AWAY_PORT = 1455;
 /** Refresh codes that mean the session is gone for good, as opposed to a bad moment on the network. */
 const DEAD = new Set([
   "invalid_grant",
@@ -245,22 +251,24 @@ export class ChatGPT {
    * Begin a sign-in for this person and return the address to send their browser to.
    * `origin` is the address they're using the app at, and `path` the page to bring them back to.
    */
-  async start(person: Person, origin: string, path = "/"): Promise<string> {
+  async start(person: Person, origin: string, path = "/"): Promise<{ url: string; paste: boolean }> {
     const { authorization_endpoint } = await this.discover();
     const saved = await this.read(person);
     const at = new URL(origin);
     let redirectUri: string;
     let clientId: string;
+    let paste = false;
     if (this.options.clientId) {
       clientId = this.options.clientId;
       redirectUri = this.options.redirectUri ?? `${at.origin}/__computah/chatgpt/callback`;
     } else {
-      // The open-source flow comes back to 127.0.0.1, which is the person's own machine. That only
-      // reaches this runner when they're on the same machine as it.
-      if (!["localhost", "127.0.0.1", "[::1]"].includes(at.hostname) && !at.hostname.endsWith(".localhost"))
-        throw new RequestError("Connecting ChatGPT on a hosted app needs a client ID from OpenAI. Its owner sets `chatgpt.clientId`.", 501);
+      // The open-source flow comes back to 127.0.0.1, which is the person's own machine. If that's
+      // this machine too, the runner gets the answer itself. If not, the page won't load, and they
+      // paste its address back to finish.
+      const here = ["localhost", "127.0.0.1", "[::1]"].includes(at.hostname) || at.hostname.endsWith(".localhost");
+      paste = !here;
       clientId = saved?.client_id ?? DYNAMIC;
-      redirectUri = `http://127.0.0.1:${at.port || "80"}${LOOPBACK_CALLBACK}`;
+      redirectUri = `http://127.0.0.1:${here ? at.port || "80" : AWAY_PORT}${LOOPBACK_CALLBACK}`;
     }
     const state = random();
     const verifier = random(48);
@@ -288,7 +296,7 @@ export class ChatGPT {
     // Someone who has connected before skips choosing their account again.
     if (saved?.id_token) query.set("id_token_hint", saved.id_token);
     if (saved?.email) query.set("login_hint", saved.email);
-    return `${authorization_endpoint}?${query}`;
+    return { url: `${authorization_endpoint}?${query}`, paste };
   }
 
   /** Whether a callback belongs to a sign-in this runner started. Lets the front door tell its own callbacks from the app's pages. */
@@ -299,10 +307,15 @@ export class ChatGPT {
   /**
    * Finish a sign-in from what OpenAI sent back. Returns where to send the browser, and whether
    * the person is now connected. The attempt is used up either way.
+   *
+   * `by` is who is handing the answer over, when a person does it themselves by pasting. An
+   * answer can only be finished by the person who started that sign-in.
    */
-  async finish(query: URLSearchParams): Promise<{ back: string; connected: boolean; problem?: string }> {
+  async finish(query: URLSearchParams, by?: Person): Promise<{ back: string; connected: boolean; problem?: string }> {
     const state = query.get("state") ?? "";
     const attempt = this.attempts.get(state);
+    // Someone else's answer is refused without using it up, so it can't be spoiled for its owner.
+    if (attempt && by && attempt.person.id !== by.id) throw new RequestError("That sign-in was started by someone else.", 403);
     this.attempts.delete(state);
     if (!attempt || attempt.expiresAt < Date.now()) throw new RequestError("That sign-in has expired. Start it again from the app.", 400);
     const fail = (problem: string) => ({ back: attempt.back, connected: false, problem });

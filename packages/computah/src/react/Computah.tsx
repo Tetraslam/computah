@@ -601,6 +601,35 @@ export function Computah({
                       </button>
                     )}
                   </p>
+                ) : box.chatgptPaste ? (
+                  <form
+                    className="footer"
+                    part="chatgpt"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const field = event.currentTarget.elements.namedItem("address") as HTMLInputElement | null;
+                      if (field?.value.trim()) void box.finishChatGPT(field.value);
+                    }}
+                  >
+                    <span>
+                      approve it in the tab that opened. it ends on a page that won't load, and that's fine: copy that page's address and
+                      paste it here.
+                    </span>
+                    <input
+                      className="field paste"
+                      name="address"
+                      aria-label="The address the sign-in ended on"
+                      placeholder="http://127.0.0.1:1455/auth/callback?code=…"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button type="submit" className="plain">
+                      finish
+                    </button>
+                    <button type="button" className="link" onClick={box.cancelChatGPT}>
+                      cancel
+                    </button>
+                  </form>
                 ) : (
                   <p className="footer" part="chatgpt">
                     {box.chatgpt.required ? "requests here use your own ChatGPT plan." : "you can use your own ChatGPT plan here."}

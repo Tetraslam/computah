@@ -128,8 +128,8 @@ const ann = { id: "guest:ann", name: "guest" };
 const bob = { id: "guest:bob", name: "guest" };
 
 /** Play the part of the browser and OpenAI: approve the sign-in at `url` and return what comes back to the callback. */
-function approve(url: string, as = "ann-sub", options: { issued?: string; scope?: string } = {}) {
-  const asked = new URL(url).searchParams;
+function approve(started: string | { url: string }, as = "ann-sub", options: { issued?: string; scope?: string } = {}) {
+  const asked = new URL(typeof started === "string" ? started : started.url).searchParams;
   const first = asked.get("client_id") === "dynamic_agent_client";
   const client = first ? (options.issued ?? "oaiapp_ann") : (asked.get("client_id") ?? "");
   const code = `c-${Math.random().toString(36).slice(2)}`;
@@ -150,8 +150,9 @@ describe("connecting a ChatGPT account, the open-source way", () => {
   it("registers a client for the person, keeps their tokens to themselves, and brings them back where they were", async () => {
     const chatgpt = new ChatGPT(dir, { issuer });
     expect(await chatgpt.status(ann)).toEqual({ connected: false, email: undefined });
-    const url = await chatgpt.start(ann, "http://localhost:8000", "/docs?x=1");
-    const { asked, back } = approve(url);
+    const started = await chatgpt.start(ann, "http://localhost:8000", "/docs?x=1");
+    expect(started.paste).toBe(false);
+    const { asked, back } = approve(started);
     // What OpenAI's guide asks for: the registration entrypoint, a loopback callback on 127.0.0.1, PKCE, and the plan scope.
     expect(asked.get("client_id")).toBe("dynamic_agent_client");
     expect(asked.get("redirect_uri")).toBe("http://127.0.0.1:8000/auth/callback");
@@ -177,9 +178,20 @@ describe("connecting a ChatGPT account, the open-source way", () => {
     expect(statSync(join(dir, readdirOne(dir))).mode & 0o777).toBe(0o600);
   });
 
-  it("only works where the browser is on the runner's machine", async () => {
+  it("is finished by pasting the address when the runner isn't on the person's machine, and only by whoever started it", async () => {
     const chatgpt = new ChatGPT(dir, { issuer });
-    await expect(chatgpt.start(ann, "https://example.com")).rejects.toThrow(/client ID from OpenAI/);
+    const started = await chatgpt.start(ann, "https://example.com", "/page");
+    // It comes back to the person's own machine, where nothing of ours is listening.
+    expect(started.paste).toBe(true);
+    const { asked, back } = approve(started);
+    expect(asked.get("redirect_uri")).toBe("http://127.0.0.1:1455/auth/callback");
+    // Someone else who got hold of the address can't finish it, and trying doesn't spoil it for its owner.
+    await expect(chatgpt.finish(back, bob)).rejects.toThrow(/someone else/);
+    expect((await chatgpt.status(bob)).connected).toBe(false);
+    expect(await chatgpt.finish(back, ann)).toEqual({ back: "https://example.com/page", connected: true });
+    expect(await chatgpt.access(ann)).toBe("a-ann-sub-0");
+    // The address works once.
+    await expect(chatgpt.finish(back, ann)).rejects.toThrow(/expired/);
   });
 
   it("uses the owner's client and the app's own callback when OpenAI issued one", async () => {
@@ -367,6 +379,7 @@ describe("an app where people bring their own ChatGPT plan", () => {
 
       // They connect. The browser goes to ChatGPT and comes back to the page it left.
       const { data } = await call("mel", "/chatgpt/start", { path: "/somewhere?a=1" });
+      expect(data.paste).toBe(false);
       const { asked, back } = approve(data.url as unknown as string, "mel-sub", { issued: "oaiapp_mel" });
       expect(asked.get("redirect_uri")).toBe(`http://127.0.0.1:${port}/auth/callback`);
       const returned = await fetch(`http://127.0.0.1:${port}/auth/callback?${back}`, { redirect: "manual" });
@@ -389,6 +402,27 @@ describe("an app where people bring their own ChatGPT plan", () => {
       // The owner doesn't have to connect, and their requests still go to the app's own agent.
       const owners = await settle("olive", (await call("olive", "/jobs", { text: "mine" })).data.job as unknown as Job);
       expect(owners).toMatchObject({ state: "done", agent: "owners" });
+
+      // Reached at an address that isn't this machine, the same sign-in is finished by pasting where it ended up.
+      const away = await fetch(`http://127.0.0.1:${port}/__computah/chatgpt/start`, {
+        method: "POST",
+        // As a proxy in front of a hosted app would send it on.
+        headers: {
+          "x-user": "olive",
+          origin: "https://app.example.com",
+          "x-forwarded-host": "app.example.com",
+          "content-type": "application/json",
+          "x-computah": "1",
+        },
+        body: JSON.stringify({ path: "/" }),
+      });
+      const begun = (await away.json()) as { url: string; paste: boolean };
+      expect(begun.paste).toBe(true);
+      const landed = `http://127.0.0.1:1455/auth/callback?${approve(begun, "olive-sub", { issued: "oaiapp_olive" }).back}`;
+      expect((await call("mel", "/chatgpt/finish", { address: landed })).status).toBe(403);
+      expect((await call("olive", "/chatgpt/finish", { address: "not an address" })).status).toBe(400);
+      expect((await call("olive", "/chatgpt/finish", { address: landed })).data).toEqual({ connected: true });
+      expect((await call("olive", "/me")).data.chatgpt).toMatchObject({ connected: true, email: "olive-sub@example.com" });
 
       // Disconnecting ends it: OpenAI is told, and they're back to having to connect.
       expect((await call("mel", "/chatgpt/disconnect", {})).data).toEqual({ revoked: true });

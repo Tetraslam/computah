@@ -184,6 +184,7 @@ export const STYLES = /* css */ `
   outline: none;
   overflow-y: auto;
 }
+.field.paste { flex: 1 1 220px; width: auto; min-height: 0; padding: 3px 6px; font: 11px/1.4 var(--mono, ui-monospace, monospace); }
 .field::placeholder { color: var(--ink); opacity: 1; font-style: italic; }
 .field:focus { box-shadow: 0 0 0 1px var(--ink); }
 .field::selection, .request::selection, .status-text::selection { background: var(--ink); color: var(--paper); }

@@ -89,7 +89,9 @@ export function createClient(options: ClientOptions = {}) {
     info: () => call<Info>("/"),
     hello: () => call<{ ok: boolean; guest: boolean }>("/hello", {}),
     /** Begin connecting this person's ChatGPT account. Returns the address to send the browser to. */
-    connectChatGPT: async (path: string) => (await call<{ url: string }>("/chatgpt/start", { path })).url,
+    connectChatGPT: (path: string) => call<{ url: string; paste: boolean }>("/chatgpt/start", { path }),
+    /** Finish a sign-in from the address the browser ended up at, when the runner couldn't receive it itself. */
+    finishChatGPT: (address: string) => call<{ connected: boolean; problem?: string }>("/chatgpt/finish", { address }),
     disconnectChatGPT: () => call<{ revoked: boolean }>("/chatgpt/disconnect", {}),
     /** Say that a request is probably coming, so the runner can get ready for it. */
     warm: () => call<{ ok: boolean }>("/warm", {}),

@@ -157,7 +157,11 @@ async function api(site: Site, person: Person | null, path: string, request: Inc
     const forwarded = request.headers["x-forwarded-proto"];
     const scheme = (typeof forwarded === "string" ? forwarded.split(",")[0]?.trim() : undefined) || "http";
     const origin = request.headers.origin ?? `${scheme}://${request.headers.host ?? "localhost"}`;
-    return send(response, 200, { url: await site.connectChatGPT(person, origin, typeof body.path === "string" ? body.path : "/") });
+    return send(response, 200, await site.connectChatGPT(person, origin, typeof body.path === "string" ? body.path : "/"));
+  }
+  if (first === "chatgpt" && method === "POST" && id === "finish") {
+    const body = await readJson(request);
+    return send(response, 200, await site.pasteChatGPT(person, typeof body.address === "string" ? body.address : ""));
   }
   if (first === "chatgpt" && method === "POST" && id === "disconnect") return send(response, 200, await site.disconnectChatGPT(person));
   if (first === "warm" && method === "POST") {

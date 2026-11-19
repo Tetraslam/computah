@@ -444,6 +444,7 @@ export class Site {
     const { version } = this.find(person, id, true);
     // A build that's under way is seconds from done, so wait for it instead of refusing.
     if (version.building) await version.building.catch(() => {});
+    await version.lane.wrapUp();
     if (version.lane.busy) throw new RequestError("Wait for the change in progress to finish first.", 409);
     const own = !!version.release && !version.release.process.exited;
     const undone = await version.lane.undo(id);
@@ -751,8 +752,11 @@ export class Site {
 
   // ---------- people's own ChatGPT plans ----------
 
-  /** Start connecting this person's ChatGPT account. Returns where to send their browser. */
-  async connectChatGPT(person: Person | null, origin: string, path?: string): Promise<string> {
+  /**
+   * Start connecting this person's ChatGPT account. Returns where to send their browser, and
+   * whether they'll have to paste the address it ends up at to finish.
+   */
+  async connectChatGPT(person: Person | null, origin: string, path?: string): Promise<{ url: string; paste: boolean }> {
     if (!this.plans) throw new RequestError("This app doesn't use ChatGPT accounts.", 404);
     if (!person || this.level(person) === "visitor") throw new RequestError("You can't change this app.", 403);
     return this.plans.start(person, origin, path);
@@ -766,6 +770,21 @@ export class Site {
   finishChatGPT(query: URLSearchParams) {
     if (!this.plans) throw new RequestError("This app doesn't use ChatGPT accounts.", 404);
     return this.plans.finish(query);
+  }
+
+  /** Finish a sign-in from the address the person's browser ended up at, which they pasted in. */
+  async pasteChatGPT(person: Person | null, address: string) {
+    if (!this.plans) throw new RequestError("This app doesn't use ChatGPT accounts.", 404);
+    if (!person) throw new RequestError("You can't change this app.", 403);
+    let query: URLSearchParams;
+    try {
+      query = new URL(address.trim()).searchParams;
+    } catch {
+      throw new RequestError("That isn't the address. Copy the whole thing from the address bar, starting with http.", 400);
+    }
+    if (!query.get("state")) throw new RequestError("That isn't the address from the sign-in. It has `state=` in it.", 400);
+    const { connected, problem } = await this.plans.finish(query, person);
+    return { connected, problem };
   }
 
   async disconnectChatGPT(person: Person | null) {

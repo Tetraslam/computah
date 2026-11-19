@@ -198,10 +198,26 @@ export function useBox(options: BoxOptions) {
   //
   // Where the app offers it, a person can connect their ChatGPT account and have their requests
   // made on their own plan. Connecting leaves the page for ChatGPT's sign-in and comes back.
+  const [chatgptPaste, setChatgptPaste] = useState(false);
   const connectChatGPT = useCallback(async () => {
-    const url = await guard(() => client.connectChatGPT(window.location.pathname + window.location.search));
-    if (url) window.location.assign(url);
+    const started = await guard(() => client.connectChatGPT(window.location.pathname + window.location.search));
+    if (!started) return;
+    if (!started.paste) return window.location.assign(started.url);
+    // The sign-in can't come back here by itself, so it opens beside this page, and they bring its last address back.
+    window.open(started.url, "_blank", "noopener");
+    setChatgptPaste(true);
   }, [client, guard]);
+  const finishChatGPT = useCallback(
+    async (address: string) => {
+      const result = await guard(() => client.finishChatGPT(address));
+      if (!result) return;
+      if (!result.connected) return setProblem(result.problem ?? "ChatGPT didn't complete the sign-in.");
+      setChatgptPaste(false);
+      setChatgptJustConnected(true);
+      await refresh();
+    },
+    [client, guard, refresh],
+  );
   const disconnectChatGPT = useCallback(
     () =>
       act(async () => {
@@ -303,6 +319,14 @@ export function useBox(options: BoxOptions) {
     chatgpt: info?.chatgpt,
     /** Send them to ChatGPT's sign-in to connect their account. They come back to this page. */
     connectChatGPT,
+    /**
+     * True after `connectChatGPT()` when the sign-in opened in another tab and can't come back by
+     * itself: it ends on a page that won't load, and the person pastes that page's address to
+     * `finishChatGPT(address)`.
+     */
+    chatgptPaste,
+    finishChatGPT,
+    cancelChatGPT: () => setChatgptPaste(false),
     disconnectChatGPT,
     /** True right after they connect, until `dismissChatGPTWelcome()`. OpenAI asks apps to confirm it once. */
     chatgptJustConnected,
