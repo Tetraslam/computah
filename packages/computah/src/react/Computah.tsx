@@ -196,7 +196,13 @@ export function Computah({
   const [now, setNow] = useState(0);
   const [mac, setMac] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
-  const windowRef = useRef<HTMLElement>(null);
+  const windowRef = useRef<HTMLElement | null>(null);
+  // The window only exists once the runner has said who this is, so effects that measure it wait on this.
+  const [windowShown, setWindowShown] = useState(false);
+  const attachWindow = useCallback((element: HTMLElement | null) => {
+    windowRef.current = element;
+    setWindowShown(!!element);
+  }, []);
   const rootElement = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<Element | null>(null);
   // Don't reload the page out from under a request that's half typed.
@@ -217,7 +223,7 @@ export function Computah({
   // The box grows as requests are added, so its bottom edge is checked against the window whenever either changes size.
   useEffect(() => {
     const element = windowRef.current;
-    if (!open || !position || !element) return;
+    if (!open || !position || !element || !windowShown) return;
     const settle = () => {
       const rect = element.getBoundingClientRect();
       const over = rect.bottom - (viewport.height - 8);
@@ -227,7 +233,7 @@ export function Computah({
     const watching = new ResizeObserver(settle);
     watching.observe(element);
     return () => watching.disconnect();
-  }, [open, position, viewport]);
+  }, [open, position, viewport, windowShown]);
 
   // Mount a shadow root on the body, so the host app's styles and ours never meet.
   useEffect(() => {
@@ -463,7 +469,7 @@ export function Computah({
       )}
       {open && (
         <section
-          ref={windowRef}
+          ref={attachWindow}
           className="window"
           part="window"
           data-picking={picking || undefined}
