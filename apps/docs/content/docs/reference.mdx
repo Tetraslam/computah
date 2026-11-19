@@ -35,7 +35,7 @@ computah serve [--config computah.config.mjs] [--port 8000] [--cwd .]
 
 | flag | default | |
 | --- | --- | --- |
-| `--agent` | first one installed | `claude`, `opencode` or `codex` |
+| `--agent` | first one installed | `claude`, `opencode`, `codex`, `droid`, `cursor` or `devin` |
 | `--model` | the agent's own | model passed to the agent |
 | `--port` | `4821` | where it listens |
 | `--host` | `127.0.0.1` | anything else needs `--secret` |
@@ -109,6 +109,20 @@ each command runs in a shell in the app's folder, with `PORT` set
 | `host` | none | who builds what's pushed. without one, a change counts as live once the push lands |
 | `check` | `true` when `app.build` is set | build on the runner before pushing |
 
+### `chatgpt`
+
+lets people connect their own chatgpt account so their requests run on their plan. the whole story is on [their own chatgpt plan](/chatgpt)
+
+| field | default | |
+| --- | --- | --- |
+| `clientId` | none | the oauth client id openai issued you. without one it uses the open-source flow, which only works on the runner's own machine |
+| `clientSecret` | none | for a confidential client |
+| `redirectUri` | your app's address plus `/__computah/chatgpt/callback` | the exact callback registered for `clientId` |
+| `require` | nobody | `"members"` or `"everyone"`: who has to connect before they can send a request |
+| `model` | codex's default | the model their requests use |
+| `appName` | `"computah"` | what they see the app called when they approve it |
+| `command` | `"codex"` | the codex command, if it isn't on the path |
+
 ### `sandbox`
 
 | field | default | |
@@ -159,7 +173,8 @@ it returns `{ GET, POST }`
 
 from `@tetraslam13/computah/server`:
 
-- **agents.** `claude`, `opencode`, `codex`, `agents`
+- **agents.** `claude`, `opencode`, `codex`, `droid`, `cursor`, `devin`, `agents`
+- **chatgpt.** `ChatGPT`, `planAgent`. see [their own chatgpt plan](/chatgpt)
 - **identities.** `exe`, `local`, `header`, `gateway`
 - **member check.** `clientOnly`
 - **host.** `vercel`

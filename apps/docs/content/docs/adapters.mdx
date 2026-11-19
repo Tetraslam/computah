@@ -7,7 +7,7 @@ every part that touches the outside world can be swapped, and each is small enou
 
 | kind | built in | your own |
 | --- | --- | --- |
-| agent | `claude`, `opencode`, `codex` | an object with `command()` and `parse()` |
+| agent | `claude`, `opencode`, `codex`, `droid`, `cursor`, `devin` | an object with `command()` and `parse()` |
 | identity | `exe`, `local`, `header(name)`, `gateway(secret)` | a function from a request to a person |
 | app | any install, build, start and dev commands | |
 | host | `vercel` | an object with `deployed()` |
@@ -17,7 +17,18 @@ all of it comes from `@tetraslam13/computah/server`
 
 ## agents
 
-the built-ins run the real cli headless in the repo: `claude -p` with streaming json and permission to edit, `opencode run` with json, and `codex exec` with json, sandboxed to the workspace. each takes `{ model, args }`, and in the config `agent: "claude"` plus `model: "..."` does the same
+the built-ins run the real cli headless in the repo, signed in however you signed it in, so there's no model api key anywhere unless you put one there. each takes `{ model, args }`, and in the config `agent: "claude"` plus `model: "..."` does the same
+
+| agent | what it runs | have i run it for real |
+| --- | --- | --- |
+| `claude` | `claude -p` with streaming json and permission to edit | yes |
+| `opencode` | `opencode run` with json | yes |
+| `codex` | `codex exec` with json, sandboxed to the workspace | yes |
+| `droid` | `droid exec` with streaming json at `--auto medium` (edits, builds, tests) | yes, a change took 7.5 seconds |
+| `cursor` | `cursor-agent -p` with streaming json, `--force` and `--trust` | not yet. it's written from cursor's docs, so tell me if it's off |
+| `devin` | `devin -p` allowed to edit the workspace | not yet. devin prints plain text and not events, so the box shows what it says and none of the steps in between |
+
+one thing about cursor that's kind of annoying: their docs tell you to use that command for scripts and ci, and their acceptable use policy also bans "accessing the service through automated or non-human means, whether through a bot, script, or otherwise". i think that second one is about scrapers and not about their own cli doing what its docs say, but it's your account, so that's yours to weigh
 
 your own is a name plus `command` (what to run for one request) and `parse` (one line of output into events):
 

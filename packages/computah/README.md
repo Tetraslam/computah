@@ -1,6 +1,6 @@
 # computah, make this app better
 
-An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode or Codex) makes the change in your repo while you watch.
+An improvements box for your app. You type what should change, and a coding agent you already have (Claude Code, OpenCode, Codex, Droid, Cursor or Devin) makes the change in your repo while you watch.
 
 ![Typing a request into the box and watching a counter become a stopwatch](https://computah.sh/demo.gif)
 
@@ -65,7 +65,7 @@ Open your app and press `Ctrl+.` (`⌘.` on a Mac).
 | `defaultOpen` | `false`             | start with the box open                                                                                                                              |
 | `secret`      | none                | bearer token, for a runner started with one                                                                                                          |
 
-`computah` (the development runner): `--agent claude|opencode|codex`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
+`computah` (the development runner): `--agent claude|opencode|codex|droid|cursor|devin`, `--model`, `--port`, `--no-commit`, `--cwd`, `--host`, `--secret`, `--origin`. Run `computah --help`.
 
 ## Make it look like your app
 
@@ -218,6 +218,22 @@ What keeps this safe:
 - **A guest's agent sees only a copy of the code.** With a sandbox it runs on a throwaway machine, without your ignored files.
 - **Costs are capped.** Per-person and whole-app daily limits, a cap on agents running at once, and forgotten guests are cleaned up.
 
+## People's own ChatGPT plan
+
+With `chatgpt` set, a person can press **Continue with ChatGPT** in the box, and from then on their requests are made by Codex on their own ChatGPT plan instead of on anything you pay for. This is OpenAI's [Sign in with ChatGPT](https://developers.openai.com/siwc): the person approves it at OpenAI, can limit or revoke it in their ChatGPT settings, and their tokens stay on the runner.
+
+```js
+export default {
+  // ...
+  chatgpt: { require: "members" }, // members must connect before they can send a request
+};
+```
+
+OpenAI offers this two ways, and which applies to you is their call, not this library's:
+
+- **Open-source and locally hosted apps** need nothing from OpenAI. It works when the person's browser is on the machine the runner is on.
+- **A remotely hosted app** needs a client ID from OpenAI ([interest form](https://openai.com/form/sign-in-with-chatgpt-interest/)). Set `chatgpt.clientId`, and register `https://your.app/__computah/chatgpt/callback` as its callback.
+
 ## Sandboxes
 
 By default the agent runs on the machine that runs the runner, with that machine's access. A sandbox runs it somewhere disposable instead: the code is copied in (without ignored files, so no `.env`), the agent works there, and only a patch of what it changed comes back.
@@ -242,13 +258,13 @@ While the agent is in a sandbox there is no live preview: its changes arrive all
 
 ## Adapters
 
-| kind     | built in                                   | your own                                 |
-| -------- | ------------------------------------------ | ---------------------------------------- |
-| agent    | `claude`, `opencode`, `codex`              | an object with `command()` and `parse()` |
-| identity | `exe`, `local`, `header(name)`             | a function from request to person        |
-| app      | any install, build, start and dev commands |                                          |
-| host     | `vercel`                                   | an object with `deployed()`              |
-| sandbox  | `exeSandbox`, `modalSandbox`               | an object with `open()`                  |
+| kind     | built in                                                  | your own                                 |
+| -------- | --------------------------------------------------------- | ---------------------------------------- |
+| agent    | `claude`, `opencode`, `codex`, `droid`, `cursor`, `devin` | an object with `command()` and `parse()` |
+| identity | `exe`, `local`, `header(name)`                            | a function from request to person        |
+| app      | any install, build, start and dev commands                |                                          |
+| host     | `vercel`                                                  | an object with `deployed()`              |
+| sandbox  | `exeSandbox`, `modalSandbox`                              | an object with `open()`                  |
 
 ## Not done yet
 

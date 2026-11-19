@@ -1,0 +1,72 @@
+---
+title: their own chatgpt plan
+description: people connect chatgpt, and their requests run on their plan
+---
+
+okay so the annoying thing about letting other people change your app is that every change they make costs you money. this is the way around that: someone presses **Continue with ChatGPT** in the box, approves it over at openai, and from then on their requests are made by codex on their own chatgpt plan and not on anything you pay for
+
+```js title="computah.config.mjs"
+export default {
+  // ...
+  chatgpt: { require: "members" },
+};
+```
+
+it's openai's [sign in with chatgpt](https://developers.openai.com/siwc), which is a real thing they built for other apps to use, not a trick with someone's codex login. the person sees exactly what they're allowing, they can cap how much of their plan this app gets or cut it off in their chatgpt settings, and it never gives the app their conversations
+
+## the two ways openai offers it
+
+this part is openai's rules and not mine, and following them is on whoever runs the app:
+
+| | what you need | where it works |
+| --- | --- | --- |
+| open-source and locally hosted apps | nothing. each person registers a little client of their own the first time they sign in | only when their browser is on the same machine as the runner, cause openai sends them back to `127.0.0.1` |
+| a remotely hosted app | a client id from openai, which you ask for with [this form](https://openai.com/form/sign-in-with-chatgpt-interest/) | anywhere. set `chatgpt.clientId` and register `https://your.app/__computah/chatgpt/callback` as the callback |
+
+so on your laptop, or on a machine where you browse the app from that same machine, it works today with `chatgpt: {}`. for a public site where strangers connect, you need the client id first, and computah is ready for it when you have one:
+
+```js
+chatgpt: {
+  clientId: process.env.OPENAI_CLIENT_ID,
+  // only if openai gave you a confidential client
+  clientSecret: process.env.OPENAI_CLIENT_SECRET,
+  require: "members",
+},
+```
+
+## who has to connect
+
+| `require` | |
+| --- | --- |
+| left out | nobody has to. someone who connects runs on their plan, and everyone else is served by your agent like before |
+| `"members"` | people who aren't owners or trusted have to connect before they can send anything. this is the one for a public app |
+| `"everyone"` | you too |
+
+someone who has to connect and hasn't gets "connect your chatgpt account first" and the button. if they connected and then disconnect (or cut the app off at openai), their next request doesn't quietly fall back to your agent, it tells them to connect again
+
+## what the box shows
+
+- **Continue with ChatGPT** when they can connect
+- "You're using your ChatGPT plan" once, right after they do, which openai asks apps to confirm
+- after that "Using ChatGPT plan", their email, **Manage usage** (which opens their chatgpt usage settings) and **disconnect**
+- if they hit their plan's limit the request fails and says so, with where to check it
+
+with your own box on [the hook](/styling) it's `box.chatgpt` (`connected`, `email`, `required`), `box.connectChatGPT()`, `box.disconnectChatGPT()`, and `box.chatgptJustConnected` with `box.dismissChatGPTWelcome()`
+
+## what happens to their sign-in
+
+this is the part to be careful about, since you're holding something that spends another person's plan
+
+- **it stays on the runner.** each person's sign-in is a file under `.computah/chatgpt/` that only the runner's user can read. it never goes to their browser, into a url, or into a log
+- **only their own requests use it.** the token is handed to codex in that one process's environment, never as an argument, and nobody else's request can pick it up
+- **it's checked properly.** the sign-in uses pkce, a one-time `state`, and the id token's signature, issuer, audience, expiry and nonce are all verified against openai's published keys before anything is saved
+- **disconnecting is real.** it ends the session at openai and deletes the tokens here. if openai doesn't confirm, the box says so and tells them they can remove the app in chatgpt's settings
+- **with a [sandbox](/sandboxes),** the token goes into the sandbox for that one run, through stdin into a file that's deleted before codex starts. the sandbox has to be able to reach `api.openai.com`, so on exe that's `exeSandbox({ egress: "all" })`
+
+requests run with `codex exec` pointed at a provider that sends their token, the way openai's docs set up codex for this, so `codex` has to be installed where the agent runs
+
+## what's tested
+
+everything above runs in tests against a pretend openai that issues real signed tokens, checks pkce and burns each refresh token after one use, which is how i know the forged, replayed and swapped answers get refused
+
+what i haven't been able to check: the hosted flow with a real client id, cause i don't have one. the scopes a partner client gets might differ from the open-source ones (there's a `scopes` option if so)
