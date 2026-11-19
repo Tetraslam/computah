@@ -1,6 +1,6 @@
 # computah
 
-a little window you put in your app. you type what you want to be different, and the coding agent you already have goes and edits the code while you watch
+a little window you put in your app. you type what you want to be different, and the coding agent you already have (claude code, opencode, codex, droid, cursor or devin) goes and edits the code while you watch
 
 ![me asking for a stopwatch and watching the counter turn into one](https://computah.sh/demo.gif)
 
@@ -32,7 +32,7 @@ computah -- next dev
 
 then open your app and press `Ctrl+.` (`⌘.` on a mac)
 
-it runs whichever of claude code, opencode, codex, droid, cursor or devin you have installed, signed in however you signed it in. so there's no account to make and no api key to paste anywhere
+it uses your agent signed in however you signed it in, so there's no account to make and no api key to paste anywhere
 
 ## what it does
 

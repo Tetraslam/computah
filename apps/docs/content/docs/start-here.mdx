@@ -3,7 +3,9 @@ title: start here
 description: getting the box running on your laptop
 ---
 
-this gets the box into your app on your own machine, where it edits your code and hot reload shows you the result. you need a react app in a git repo, and one of [claude code](https://claude.com/claude-code), [opencode](https://opencode.ai) or [codex](https://github.com/openai/codex) installed and signed in. computah doesn't come with its own agent, it uses whichever one you already have
+this gets the box into your app on your own machine, where it edits your code and hot reload shows you the result. you need a react app in a git repo, and one of [claude code](https://claude.com/claude-code), [opencode](https://opencode.ai), [codex](https://github.com/openai/codex), [droid](https://factory.ai), [cursor's agent](https://cursor.com/cli) or [devin](https://devin.ai) installed and signed in. computah doesn't come with its own agent, it uses whichever one you already have
+
+that's all it needs on your laptop btw. no config file, no env vars, no api key
 
 ## install it
 
@@ -11,30 +13,20 @@ this gets the box into your app on your own machine, where it edits your code an
 pnpm add @tetraslam13/computah
 ```
 
+(or the same with npm, yarn or bun)
+
 ## put the box in your app
 
-it can go anywhere. in a next app i put it in the root layout so it's on every page:
+it can go anywhere. in a next app i put it in the root layout so it's on every page, which is two lines added to the layout you already have:
 
 ```tsx title="app/layout.tsx"
 import { Computah } from "@tetraslam13/computah";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        <Computah />
-      </body>
-    </html>
-  );
-}
+// ...and inside <body>, after {children}:
+<Computah />
 ```
 
-it draws itself inside a shadow root so your styles and its styles never touch each other, and it doesn't depend on anything except react
+it's already a client component, so the layout doesn't need `"use client"`. it draws itself inside a shadow root so your styles and its styles never touch each other, and it doesn't depend on anything except react
 
 ## run the runner
 
