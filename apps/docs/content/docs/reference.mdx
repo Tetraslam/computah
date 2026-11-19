@@ -115,11 +115,11 @@ lets people connect their own chatgpt account so their requests run on their pla
 
 | field | default | |
 | --- | --- | --- |
-| `clientId` | none | the oauth client id openai issued you. without one it uses the open-source flow, which only works on the runner's own machine |
+| `clientId` | none | the oauth client id openai issued you. without one it uses the open-source flow, where someone who isn't on the runner's machine pastes an address to finish |
 | `clientSecret` | none | for a confidential client |
 | `redirectUri` | your app's address plus `/__computah/chatgpt/callback` | the exact callback registered for `clientId` |
 | `require` | nobody | `"members"` or `"everyone"`: who has to connect before they can send a request |
-| `model` | codex's default | the model their requests use |
+| `model` | the first one openai lists for that person's account | the model their requests use |
 | `appName` | `"computah"` | what they see the app called when they approve it |
 | `command` | `"codex"` | the codex command, if it isn't on the path |
 

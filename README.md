@@ -231,10 +231,12 @@ export default {
 };
 ```
 
-OpenAI offers this two ways, and which applies to you is their call, not this library's:
+OpenAI offers this two ways:
 
-- **Open-source and locally hosted apps** need nothing from OpenAI. It works when the person's browser is on the machine the runner is on.
-- **A remotely hosted app** needs a client ID from OpenAI ([interest form](https://openai.com/form/sign-in-with-chatgpt-interest/)). Set `chatgpt.clientId`, and register `https://your.app/__computah/chatgpt/callback` as its callback.
+- **The open-source flow** needs nothing from OpenAI, and is what `chatgpt: {}` uses. The sign-in comes back to `127.0.0.1` on the person's own machine. If the runner is there too, it's caught automatically. If the runner is a server, that page doesn't load, and the person pastes its address into the box to finish.
+- **A client ID from OpenAI** ([interest form](https://openai.com/form/sign-in-with-chatgpt-interest/)). Set `chatgpt.clientId` and register `https://your.app/__computah/chatgpt/callback`, and the sign-in comes straight back to your app.
+
+OpenAI's docs describe the first as for open-source and locally hosted apps and point remotely hosted ones to the form, so which to use on a public site is between you and OpenAI.
 
 ## Sandboxes
 

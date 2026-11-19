@@ -16,14 +16,17 @@ it's openai's [sign in with chatgpt](https://developers.openai.com/siwc), which 
 
 ## the two ways openai offers it
 
-this part is openai's rules and not mine, and following them is on whoever runs the app:
-
-| | what you need | where it works |
+| | what you need | how the sign-in comes back |
 | --- | --- | --- |
-| open-source and locally hosted apps | nothing. each person registers a little client of their own the first time they sign in | only when their browser is on the same machine as the runner, cause openai sends them back to `127.0.0.1` |
-| a remotely hosted app | a client id from openai, which you ask for with [this form](https://openai.com/form/sign-in-with-chatgpt-interest/) | anywhere. set `chatgpt.clientId` and register `https://your.app/__computah/chatgpt/callback` as the callback |
+| the open-source flow | nothing. each person registers a little client of their own the first time they sign in | to `127.0.0.1` on the person's own machine |
+| a client id from openai | you ask for one with [this form](https://openai.com/form/sign-in-with-chatgpt-interest/) | straight to your app, at `https://your.app/__computah/chatgpt/callback` |
 
-so on your laptop, or on a machine where you browse the app from that same machine, it works today with `chatgpt: {}`. for a public site where strangers connect, you need the client id first, and computah is ready for it when you have one:
+`chatgpt: {}` is the open-source flow, and it works in both of these situations:
+
+- **the runner is on their machine** (your laptop). openai sends them back, the runner catches it, and they're connected without doing anything else
+- **the runner is somewhere else** (a server). openai still sends them to `127.0.0.1`, which is their own computer, so they land on a page that won't load. the address of that page has everything in it, so the box asks them to copy it and paste it back, and that finishes it. it's the same thing codex's own cli does for signing in on a remote machine. the address only works once, only with a secret the runner kept, and only for the person who started it
+
+one thing to be straight about: openai's docs describe the open-source flow as for "open-source and locally hosted apps" and point remotely hosted ones at that form. so whether to run the paste version on a public site, or wait for a client id, is between you and openai. computah does both:
 
 ```js
 chatgpt: {
@@ -33,6 +36,8 @@ chatgpt: {
   require: "members",
 },
 ```
+
+their requests use the first model openai lists for their own account, which is its current best (for mine that was `gpt-6.2-sol`), unless you set `chatgpt.model`
 
 ## who has to connect
 
@@ -51,7 +56,7 @@ someone who has to connect and hasn't gets "connect your chatgpt account first" 
 - after that "Using ChatGPT plan", their email, **Manage usage** (which opens their chatgpt usage settings) and **disconnect**
 - if they hit their plan's limit the request fails and says so, with where to check it
 
-with your own box on [the hook](/styling) it's `box.chatgpt` (`connected`, `email`, `required`), `box.connectChatGPT()`, `box.disconnectChatGPT()`, and `box.chatgptJustConnected` with `box.dismissChatGPTWelcome()`
+with your own box on [the hook](/styling) it's `box.chatgpt` (`connected`, `email`, `required`), `box.connectChatGPT()`, `box.disconnectChatGPT()`, and `box.chatgptJustConnected` with `box.dismissChatGPTWelcome()`. for the paste version, `box.chatgptPaste` turns true after `connectChatGPT()` opens the sign-in in another tab, and you hand the pasted address to `box.finishChatGPT(address)` (or `box.cancelChatGPT()`)
 
 ## what happens to their sign-in
 
@@ -67,8 +72,8 @@ requests run with `codex exec` pointed at a provider that sends their token, the
 
 ## what's tested
 
-i connected my own chatgpt account on my laptop with the open-source flow, sent a request, and codex made the change on my plan in 28 seconds. i also forced a renewal to check the token gets replaced properly, and it did
+i connected my own chatgpt account both ways. on my laptop the sign-in came straight back, and codex made a change on my plan in 28 seconds. on a server i did the paste version (from a train lol), and that one took 30 seconds. i also forced a renewal to check the token gets replaced properly, and it did
 
 the refusals (forged, replayed and swapped answers) run in tests against a pretend openai that issues real signed tokens, checks pkce and burns each refresh token after one use
 
-what i haven't been able to check: the hosted flow with a real client id, cause i don't have one. the scopes a partner client gets might differ from the open-source ones (there's a `scopes` option if so)
+what i haven't been able to check: the flow with a real client id from openai, cause i don't have one. the scopes a partner client gets might differ from the open-source ones (there's a `scopes` option if so)
