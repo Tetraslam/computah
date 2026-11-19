@@ -109,7 +109,7 @@ afterEach(async () => {
   site.stop();
   await new Promise<void>((resolve) => void server.close(() => resolve()));
   await new Promise((resolve) => setTimeout(resolve, 100));
-  rmSync(repo, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 describe("a served app", () => {
@@ -603,7 +603,7 @@ describe("keeping a busy app within its means", () => {
       expect(builds).toHaveLength(3);
     } finally {
       busy.stop();
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, 30_000);
 });
@@ -660,7 +660,7 @@ describe("builds side by side", () => {
       expect(most).toBe(2);
     } finally {
       busy.stop();
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, 30_000);
 });
@@ -706,7 +706,7 @@ describe("a time limit for members", () => {
       expect((await ask({ id: "olive" })).state).toBe("done");
     } finally {
       slow.stop();
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, 30_000);
 });
@@ -819,7 +819,7 @@ describe("pieces", () => {
       expect(JSON.parse(readFileSync(join(dir, ".computah/tally.json"), "utf8")).total).toBe(3);
     } finally {
       site.stop();
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, 30_000);
 });

@@ -67,6 +67,8 @@ requests run with `codex exec` pointed at a provider that sends their token, the
 
 ## what's tested
 
-everything above runs in tests against a pretend openai that issues real signed tokens, checks pkce and burns each refresh token after one use, which is how i know the forged, replayed and swapped answers get refused
+i connected my own chatgpt account on my laptop with the open-source flow, sent a request, and codex made the change on my plan in 28 seconds. i also forced a renewal to check the token gets replaced properly, and it did
+
+the refusals (forged, replayed and swapped answers) run in tests against a pretend openai that issues real signed tokens, checks pkce and burns each refresh token after one use
 
 what i haven't been able to check: the hosted flow with a real client id, cause i don't have one. the scopes a partner client gets might differ from the open-source ones (there's a `scopes` option if so)

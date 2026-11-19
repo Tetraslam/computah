@@ -31,7 +31,7 @@ beforeEach(() => {
   git("add", "-A");
   git("commit", "-qm", "start");
 });
-afterEach(() => rmSync(repo, { recursive: true, force: true }));
+afterEach(() => rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
 
 /** An agent that is really a shell script, speaking a tiny line format. */
 function scripted(script: string): Agent {
@@ -559,7 +559,7 @@ describe("more agent adapters", () => {
     ]);
   });
 
-  it("reads cursor's stream (shapes from its documentation; not yet run for real)", () => {
+  it("reads cursor's stream (shapes from its documentation, checked against a real run)", () => {
     const agent = cursor();
     const { command, args } = agent.command("do it", "/repo");
     expect(command).toBe("cursor-agent");
@@ -574,7 +574,6 @@ describe("more agent adapters", () => {
     expect(lines.flatMap((line) => agent.parse(line))).toEqual([
       { type: "text", text: "Reading it." },
       { type: "tool", name: "read", detail: "README.md" },
-      { type: "result", text: "Changed it." },
     ]);
     expect(agent.parse(`{"type":"result","subtype":"error","is_error":true,"result":"No."}`)).toEqual([{ type: "error", message: "No." }]);
   });

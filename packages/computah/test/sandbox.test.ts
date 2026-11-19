@@ -93,7 +93,7 @@ beforeEach(() => {
   git("commit", "-qm", "start");
 });
 afterEach(() => {
-  for (const dir of [repo, ...homes]) rmSync(dir, { recursive: true, force: true });
+  for (const dir of [repo, ...homes]) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 describe("an agent in a sandbox", () => {

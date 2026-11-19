@@ -19,7 +19,7 @@ const str = (value: unknown): string => (typeof value === "string" ? value : "")
 /** A short human label for a tool call: the file it touched or the command it ran. */
 export function toolDetail(input: unknown): string | undefined {
   const fields = obj(input);
-  for (const key of ["file_path", "filePath", "path", "command", "pattern", "query", "url", "description"]) {
+  for (const key of ["file_path", "filePath", "path", "command", "pattern", "globPattern", "query", "url", "description"]) {
     const value = fields[key];
     if (typeof value === "string" && value.trim()) {
       const oneLine = value.replace(/\s+/g, " ").trim();
@@ -258,10 +258,9 @@ export function cursor(options: AgentOptions = {}): Agent {
         const [kind, call] = Object.entries(obj(message.tool_call))[0] ?? ["tool", {}];
         return [{ type: "tool", name: kind.replace(/ToolCall$/, "") || "tool", detail: toolDetail(obj(call).args) }];
       }
-      if (message.type === "result") {
-        if (message.is_error) return [{ type: "error", message: str(message.result) || "The agent reported an error." }];
-        return [{ type: "result", text: str(message.result) }];
-      }
+      // Its closing result is everything it said run together, so the last thing it said is the better summary.
+      if (message.type === "result" && message.is_error)
+        return [{ type: "error", message: str(message.result) || "The agent reported an error." }];
       return [];
     },
   };

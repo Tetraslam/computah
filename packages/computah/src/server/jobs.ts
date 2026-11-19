@@ -244,6 +244,14 @@ export class Computah {
   async undo(id: string): Promise<Job> {
     const job = this.require(id);
     if (job.state !== "done") throw new RequestError("Only a finished change can be undone.", 409);
+    // A job says it's done a moment before it has put everything away. Someone quick enough to
+    // undo in that moment is waited for, not refused.
+    for (
+      let tries = 0;
+      tries < 150 && this.current && !["queued", "working"].includes(this.jobs.get(this.current.id)?.state ?? "");
+      tries++
+    )
+      await new Promise((resolve) => setTimeout(resolve, 20));
     if (this.current) throw new RequestError("Wait for the change in progress to finish first.", 409);
     try {
       const commits = job.commits ?? (job.commit ? [job.commit] : []);

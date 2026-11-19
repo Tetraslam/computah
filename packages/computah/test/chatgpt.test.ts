@@ -121,7 +121,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   server.close();
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 const ann = { id: "guest:ann", name: "guest" };
@@ -397,7 +397,7 @@ describe("an app where people bring their own ChatGPT plan", () => {
     } finally {
       front.close();
       await site.stop();
-      rmSync(repo, { recursive: true, force: true });
+      rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, 30_000);
 });

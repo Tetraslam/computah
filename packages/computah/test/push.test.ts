@@ -124,7 +124,7 @@ beforeEach(async () => {
 afterEach(async () => {
   site.stop();
   await Promise.all([runner, app].map((server) => new Promise<void>((resolve) => void server.close(() => resolve()))));
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 describe("an app its host builds", () => {
