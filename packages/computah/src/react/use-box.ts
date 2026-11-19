@@ -194,6 +194,34 @@ export function useBox(options: BoxOptions) {
     [client, guard],
   );
 
+  // ---------- their own ChatGPT plan ----------
+  //
+  // Where the app offers it, a person can connect their ChatGPT account and have their requests
+  // made on their own plan. Connecting leaves the page for ChatGPT's sign-in and comes back.
+  const connectChatGPT = useCallback(async () => {
+    const url = await guard(() => client.connectChatGPT(window.location.pathname + window.location.search));
+    if (url) window.location.assign(url);
+  }, [client, guard]);
+  const disconnectChatGPT = useCallback(
+    () =>
+      act(async () => {
+        const { revoked } = await client.disconnectChatGPT();
+        if (!revoked) setProblem("Disconnected here, but ChatGPT didn't confirm it. You can also remove this app in ChatGPT's settings.");
+      }),
+    [act, client],
+  );
+  // Back from ChatGPT's sign-in: say how it went, once, and tidy the address.
+  const [chatgptJustConnected, setChatgptJustConnected] = useState(false);
+  useEffect(() => {
+    const here = new URL(window.location.href);
+    const outcome = here.searchParams.get("computah-chatgpt");
+    if (!outcome) return;
+    here.searchParams.delete("computah-chatgpt");
+    window.history.replaceState(null, "", here.toString());
+    if (outcome === "connected") setChatgptJustConnected(true);
+    else setProblem(outcome === "failed" ? "ChatGPT didn't complete the sign-in." : outcome);
+  }, []);
+
   // ---------- reloading onto the right copy of the page ----------
   //
   // When the runner serves the app (or a host does), a change isn't something hot reload shows:
@@ -268,6 +296,17 @@ export function useBox(options: BoxOptions) {
     discard,
     view,
     refresh,
+    /**
+     * Their ChatGPT plan, where the app offers it: `connected`, `email`, and `required` (they must
+     * connect before asking). Undefined when the app doesn't offer it.
+     */
+    chatgpt: info?.chatgpt,
+    /** Send them to ChatGPT's sign-in to connect their account. They come back to this page. */
+    connectChatGPT,
+    disconnectChatGPT,
+    /** True right after they connect, until `dismissChatGPTWelcome()`. OpenAI asks apps to confirm it once. */
+    chatgptJustConnected,
+    dismissChatGPTWelcome: () => setChatgptJustConnected(false),
     /** True when a change is ready to see but its reload was held. Call `reload()` to show it. */
     ready,
     /** True while this person's own version is being put together and they're on everyone's meanwhile. */

@@ -37,6 +37,12 @@ export interface ComputahOptions {
   dataDir?: string;
   /** Extra environment for the agent process. */
   env?: NodeJS.ProcessEnv;
+  /**
+   * Choose the agent for one job, and any environment only that job gets (a person's own
+   * credentials, say). Return nothing to use `agent`. Throw a RequestError to fail the job with
+   * its message, for example when the person has to sign in again.
+   */
+  agentFor?: (job: Job) => Promise<{ agent: Agent; env?: Record<string, string> } | undefined>;
   /** Globs a job's changes must stay inside, or undefined for anywhere. A job that strays is rolled back. */
   allowedPaths?: (job: Job) => string[] | undefined;
   /** Rules beyond `allowedPaths`, in plain words, told to the agent. */
@@ -105,6 +111,8 @@ export class Computah {
     cancelled: boolean;
     /** True while this job holds one of the shared agent slots. */
     inTurn?: boolean;
+    /** The agent this job runs with, and the environment only it gets. */
+    use?: { agent: Agent; env?: Record<string, string> };
     /** Stops an agent that is running somewhere else. */
     away?: () => Promise<void>;
   } | null = null;
@@ -277,6 +285,20 @@ export class Computah {
     return (await this.options.check?.(job, changed)) ?? null;
   }
 
+  /** Settle which agent this job runs with. Asked once per job, so every step of it uses the same one. */
+  private async choose(job: Job, current: NonNullable<Computah["current"]>) {
+    if (current.use) return;
+    current.use = (await this.options.agentFor?.(job)) ?? { agent: this.options.agent };
+    if (current.use.agent.name !== job.agent) {
+      job.agent = current.use.agent.name;
+      await this.save(job);
+    }
+  }
+
+  private agentOf(current: NonNullable<Computah["current"]>): Agent {
+    return current.use?.agent ?? this.options.agent;
+  }
+
   private timeoutFor(job: Job): number {
     const { timeoutMs } = this.options;
     return (typeof timeoutMs === "function" ? timeoutMs(job) : timeoutMs) ?? 15 * 60_000;
@@ -367,7 +389,12 @@ export class Computah {
     job.summary = await chore({
       job,
       ask: async (prompt) => {
-        const { command, args, stdin } = this.options.agent.command(prompt, this.root);
+        try {
+          await this.choose(job, current);
+        } catch (error) {
+          return { summary: "", failed: error instanceof Error ? error.message : "Couldn't start the agent." };
+        }
+        const { command, args, stdin } = this.agentOf(current).command(prompt, this.root);
         return this.runAgent(job, current, command, args, stdin);
       },
       cancelled: () => current.cancelled,
@@ -395,7 +422,11 @@ export class Computah {
     await this.emit(job.id, { type: "state", state: "working" });
     await this.options.onStart?.(job);
 
-    const { command, args, stdin } = this.options.agent.command(
+    let refused = "";
+    await this.choose(job, current).catch((error: unknown) => {
+      refused = error instanceof Error ? error.message : "Couldn't start the agent.";
+    });
+    const { command, args, stdin } = this.agentOf(current).command(
       buildPrompt(
         job.text,
         job.context,
@@ -404,7 +435,7 @@ export class Computah {
       ),
       this.root,
     );
-    const outcome = await this.runAgent(job, current, command, args, stdin);
+    const outcome = refused ? { summary: "", failed: refused } : await this.runAgent(job, current, command, args, stdin);
 
     job.after = await snapshot(this.root);
     const files = (await changedFiles(this.root, job.before, job.after)).filter((file) => !file.startsWith(`${DATA_DIR}/`));
@@ -466,7 +497,7 @@ export class Computah {
       let problem = await check();
       for (let attempt = 1; problem && !fatal && attempt <= (this.options.repairs ?? 3) && !current.cancelled; attempt++) {
         await this.emit(job.id, { type: "text", text: `It didn't build. Fixing it (try ${attempt}).` });
-        const fix = this.options.agent.command(buildRepairPrompt(job.text, problem), this.root);
+        const fix = this.agentOf(current).command(buildRepairPrompt(job.text, problem), this.root);
         const repaired = await this.runAgent(job, current, fix.command, fix.args, fix.stdin);
         if (current.cancelled || repaired.failed) break;
         if (repaired.summary) job.summary = repaired.summary;
@@ -528,7 +559,7 @@ export class Computah {
       });
     }
     const sandbox = this.options.sandbox?.(job);
-    if (sandbox) return this.runAway(job, current, sandbox, { command, args, stdin });
+    if (sandbox) return this.runAway(job, current, sandbox, { command, args, stdin, env: current.use?.env });
     return new Promise((resolve) => {
       let lastText = "";
       let result = "";
@@ -546,7 +577,7 @@ export class Computah {
       try {
         child = spawn(command, args, {
           cwd: this.root,
-          env: { ...process.env, ...this.options.env },
+          env: { ...process.env, ...this.options.env, ...current.use?.env },
           detached: true,
           stdio: ["pipe", "pipe", "pipe"],
         });
@@ -569,7 +600,7 @@ export class Computah {
       });
       const lines = createInterface({ input: child.stdout ?? process.stdin });
       lines.on("line", (line) => {
-        for (const event of this.options.agent.parse(line)) {
+        for (const event of this.agentOf(current).parse(line)) {
           if (event.type === "result") result = event.text;
           else if (event.type === "error") {
             agentError = event.message;
@@ -592,7 +623,7 @@ export class Computah {
     job: Job,
     current: NonNullable<Computah["current"]>,
     sandbox: Sandbox,
-    agent: { command: string; args: string[]; stdin?: string },
+    agent: { command: string; args: string[]; stdin?: string; env?: Record<string, string> },
   ): Promise<{ summary: string; failed?: string }> {
     let lastText = "";
     let result = "";
@@ -609,7 +640,7 @@ export class Computah {
       if (current.cancelled) return { summary: "" };
       const tar = await archive(this.root, await snapshot(this.root));
       const outcome = await runInSandbox(session, tar, agent, (line) => {
-        for (const event of this.options.agent.parse(line)) {
+        for (const event of this.agentOf(current).parse(line)) {
           if (event.type === "result") result = event.text;
           else if (event.type === "error") agentError = event.message;
           else {

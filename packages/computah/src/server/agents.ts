@@ -175,6 +175,8 @@ export function codex(options: AgentOptions = {}): Agent {
           detail: str(obj(change).path) || undefined,
         }));
       }
+      // Codex reports each retry of a dropped connection as an error. Only the one that ends the turn is one.
+      if (message.type === "error" && /^Reconnecting\b/.test(str(message.message))) return [];
       if (message.type === "error" || message.type === "turn.failed") {
         return [
           {
@@ -188,5 +190,114 @@ export function codex(options: AgentOptions = {}): Agent {
   };
 }
 
-export const agents = { claude, opencode, codex };
+/** Droid, from Factory: `droid exec --output-format stream-json`, allowed to edit, build and test. */
+export function droid(options: AgentOptions = {}): Agent {
+  return {
+    name: "droid",
+    command: (prompt) => ({
+      command: "droid",
+      args: [
+        "exec",
+        "--output-format",
+        "stream-json",
+        "--auto",
+        "medium",
+        ...(options.model ? ["--model", options.model] : []),
+        ...(options.args ?? []),
+        prompt,
+      ],
+    }),
+    parse(line) {
+      const message = parseJson(line);
+      if (!message) return [];
+      if (message.type === "message" && message.role === "assistant" && str(message.text).trim())
+        return [{ type: "text", text: str(message.text) }];
+      if (message.type === "tool_call") {
+        const input = obj(message.parameters);
+        // Droid does most things through a script that calls its tools. The first line of it says what it's up to.
+        const script = str(input.script).match(/command:\s*[`"']([^`"']+)/)?.[1] ?? str(input.script).split("\n")[0];
+        return [{ type: "tool", name: str(message.toolName) || "tool", detail: toolDetail(input) ?? toolDetail({ command: script }) }];
+      }
+      if (message.type === "completion") return [{ type: "result", text: str(message.finalText) }];
+      if (message.type === "error")
+        return [{ type: "error", message: str(message.message) || str(obj(message.error).message) || "The agent reported an error." }];
+      return [];
+    },
+  };
+}
+
+/** Cursor's agent: `cursor-agent -p --output-format stream-json`, allowed to run what it needs. */
+export function cursor(options: AgentOptions = {}): Agent {
+  return {
+    name: "cursor",
+    command: (prompt) => ({
+      command: "cursor-agent",
+      args: [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--force",
+        "--trust",
+        ...(options.model ? ["--model", options.model] : []),
+        ...(options.args ?? []),
+        prompt,
+      ],
+    }),
+    parse(line) {
+      const message = parseJson(line);
+      if (!message) return [];
+      if (message.type === "assistant") {
+        const content = obj(message.message).content;
+        const text = (Array.isArray(content) ? content : [])
+          .map((block) => (obj(block).type === "text" ? str(obj(block).text) : ""))
+          .join("");
+        return text.trim() ? [{ type: "text", text }] : [];
+      }
+      if (message.type === "tool_call" && message.subtype === "started") {
+        // The call is an object with one key naming the tool, such as `readToolCall` or `shellToolCall`.
+        const [kind, call] = Object.entries(obj(message.tool_call))[0] ?? ["tool", {}];
+        return [{ type: "tool", name: kind.replace(/ToolCall$/, "") || "tool", detail: toolDetail(obj(call).args) }];
+      }
+      if (message.type === "result") {
+        if (message.is_error) return [{ type: "error", message: str(message.result) || "The agent reported an error." }];
+        return [{ type: "result", text: str(message.result) }];
+      }
+      return [];
+    },
+  };
+}
+
+/** Terminal colour codes, which Devin prints even when nobody's looking. */
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
+
+/**
+ * Devin's CLI: `devin -p`, allowed to edit the workspace.
+ * It prints plain text, not events, so the box shows what it says and nothing of the steps in between.
+ */
+export function devin(options: AgentOptions = {}): Agent {
+  return {
+    name: "devin",
+    command: (prompt) => ({
+      command: "devin",
+      args: [
+        "--permission-mode",
+        "accept-edits",
+        "--respect-workspace-trust",
+        "false",
+        ...(options.model ? ["--model", options.model] : []),
+        ...(options.args ?? []),
+        "-p",
+        prompt,
+      ],
+    }),
+    parse(line) {
+      const text = line.replace(ANSI, "").trim();
+      if (!text) return [];
+      if (/^Error: /.test(text)) return [{ type: "error", message: text.slice(7) }];
+      return [{ type: "text", text }];
+    },
+  };
+}
+
+export const agents = { claude, opencode, codex, droid, cursor, devin };
 export type AgentName = keyof typeof agents;

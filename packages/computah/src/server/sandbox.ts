@@ -103,6 +103,7 @@ export function warm(sandbox: Sandbox, options: WarmOptions = {}): Sandbox & { h
 
 /** Where the copy lives in the sandbox. Quoted wherever it is used, since $HOME is expanded there. */
 const WORK = '"$HOME/computah-work"';
+const SECRETS = '"$HOME/.computah-run-env"';
 
 /**
  * Run an agent in a sandbox on a copy of the code and return what it changed.
@@ -125,8 +126,20 @@ export async function runInSandbox(
   if (unpack.code !== 0)
     throw new AppError(`Couldn't copy the code into the sandbox. ${unpack.stderr.trim().split("\n").pop() ?? ""}`, true);
 
+  // Anything only this run may know (a person's credentials) goes in through stdin to a file only
+  // this user can read, so it never shows up in a command line or a log.
+  const names = Object.keys(agent.env ?? {});
+  if (names.some((name) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)))
+    throw new AppError("An environment name for the agent isn't valid.", true);
+  if (names.length) {
+    const lines = names.map((name) => `${name}='${(agent.env?.[name] ?? "").replace(/'/g, `'\\''`)}'`).join("\n");
+    const kept = await session.exec(["sh", "-c", `umask 077 && cat > ${SECRETS}`], { stdin: `${lines}\n` });
+    if (kept.code !== 0) throw new AppError("Couldn't prepare the sandbox.", true);
+  }
+  const load = names.length ? `set -a && . ${SECRETS} && set +a && rm -f ${SECRETS} && ` : "";
+
   // The agent's own arguments are passed as arguments, never pasted into a shell string.
-  const run = await session.exec(["sh", "-c", `cd ${WORK} && exec "$@"`, "agent", agent.command, ...agent.args], {
+  const run = await session.exec(["sh", "-c", `${load}cd ${WORK} && exec "$@"`, "agent", agent.command, ...agent.args], {
     stdin: agent.stdin ?? "",
     onLine,
   });

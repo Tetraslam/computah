@@ -72,6 +72,8 @@ export interface AgentCommand {
   args: string[];
   /** Written to the agent's stdin, then closed. */
   stdin?: string;
+  /** Extra environment for this one run, such as a person's own credentials. Never logged or stored. */
+  env?: Record<string, string>;
 }
 
 export interface Agent {

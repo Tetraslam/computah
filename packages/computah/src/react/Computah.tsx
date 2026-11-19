@@ -583,6 +583,32 @@ export function Computah({
                 </p>
               )}
               {box.info?.note && <p className="footer">{box.info.note}</p>}
+              {box.chatgpt &&
+                (box.chatgpt.connected ? (
+                  <p className="footer" part="chatgpt">
+                    {box.chatgptJustConnected ? "You're using your ChatGPT plan." : "Using ChatGPT plan"}
+                    {box.chatgpt.email && !box.chatgptJustConnected && <span className="quiet">{box.chatgpt.email}</span>}
+                    <a className="link" href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">
+                      Manage usage
+                    </a>
+                    {box.chatgptJustConnected ? (
+                      <button type="button" className="link" onClick={box.dismissChatGPTWelcome}>
+                        Got it
+                      </button>
+                    ) : (
+                      <button type="button" className="link" onClick={() => void box.disconnectChatGPT()}>
+                        disconnect
+                      </button>
+                    )}
+                  </p>
+                ) : (
+                  <p className="footer" part="chatgpt">
+                    {box.chatgpt.required ? "requests here use your own ChatGPT plan." : "you can use your own ChatGPT plan here."}
+                    <button type="button" className="plain" data-oai-siwc-button="" onClick={() => void box.connectChatGPT()}>
+                      Continue with ChatGPT
+                    </button>
+                  </p>
+                ))}
               {pushed && box.info?.ownUrl && (
                 <p className="footer">
                   you have a version of your own.

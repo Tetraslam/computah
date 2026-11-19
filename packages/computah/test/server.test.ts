@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { claude, codex, opencode, toolDetail } from "../src/server/agents.js";
+import { claude, codex, cursor, devin, droid, opencode, toolDetail } from "../src/server/agents.js";
 import { changedFiles, restore, snapshot } from "../src/server/git.js";
 import { cleanContext, createRunnerServer, type RequestFacts, refuse } from "../src/server/http.js";
 import { Computah } from "../src/server/jobs.js";
@@ -535,6 +535,65 @@ describe("agent adapters", () => {
       expect(agent.parse("[1,2]")).toEqual([]);
     }
     expect(toolDetail({ command: `echo ${"x".repeat(300)}` })?.length).toBe(140);
+  });
+});
+
+describe("more agent adapters", () => {
+  it("reads droid's stream (lines recorded from a real run)", () => {
+    const agent = droid({ model: "provider/model" });
+    const { command, args } = agent.command("do it", "/repo");
+    expect(command).toBe("droid");
+    expect(args).toEqual(["exec", "--output-format", "stream-json", "--auto", "medium", "--model", "provider/model", "do it"]);
+    const lines = [
+      `{"type":"system","subtype":"init","cwd":"/tmp/agt","session_id":"s","tools":["Read","LS"],"model":"m"}`,
+      `{"type":"message","role":"user","id":"u","text":"append a line","session_id":"s"}`,
+      '{"type":"tool_call","id":"c","toolId":"Script","toolName":"Script","parameters":{"script":"const r = await tools.Execute({command: `cd /tmp/agt && tail -c1 page.txt`});"},"session_id":"s"}',
+      `{"type":"tool_result","id":"c","toolId":"Script","isError":false,"value":"exit 0","session_id":"s"}`,
+      `{"type":"message","role":"assistant","id":"a","text":"The file ends with a newline.","session_id":"s"}`,
+      `{"type":"completion","finalText":"I appended the line.","numTurns":5,"durationMs":4117,"session_id":"s"}`,
+    ];
+    expect(lines.flatMap((line) => agent.parse(line))).toEqual([
+      { type: "tool", name: "Script", detail: "cd /tmp/agt && tail -c1 page.txt" },
+      { type: "text", text: "The file ends with a newline." },
+      { type: "result", text: "I appended the line." },
+    ]);
+  });
+
+  it("reads cursor's stream (shapes from its documentation; not yet run for real)", () => {
+    const agent = cursor();
+    const { command, args } = agent.command("do it", "/repo");
+    expect(command).toBe("cursor-agent");
+    expect(args).toEqual(["-p", "--output-format", "stream-json", "--force", "--trust", "do it"]);
+    const lines = [
+      `{"type":"system","subtype":"init","apiKeySource":"login","cwd":"/project","session_id":"s"}`,
+      `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Reading it."}]},"session_id":"s"}`,
+      `{"type":"tool_call","subtype":"started","call_id":"c","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}`,
+      `{"type":"tool_call","subtype":"completed","call_id":"c","tool_call":{"readToolCall":{"result":{"success":{"content":"x"}}}}}`,
+      `{"type":"result","subtype":"success","is_error":false,"result":"Changed it.","session_id":"s"}`,
+    ];
+    expect(lines.flatMap((line) => agent.parse(line))).toEqual([
+      { type: "text", text: "Reading it." },
+      { type: "tool", name: "read", detail: "README.md" },
+      { type: "result", text: "Changed it." },
+    ]);
+    expect(agent.parse(`{"type":"result","subtype":"error","is_error":true,"result":"No."}`)).toEqual([{ type: "error", message: "No." }]);
+  });
+
+  it("reads devin's plain output, and its errors (the error line is from a real run)", () => {
+    const agent = devin();
+    expect(agent.command("do it", "/repo").args).toEqual([
+      "--permission-mode",
+      "accept-edits",
+      "--respect-workspace-trust",
+      "false",
+      "-p",
+      "do it",
+    ]);
+    expect(agent.parse("\u001b[1mI added the line.\u001b[0m")).toEqual([{ type: "text", text: "I added the line." }]);
+    expect(agent.parse("   ")).toEqual([]);
+    expect(agent.parse("Error: Authentication failed: that API key was rejected")).toEqual([
+      { type: "error", message: "Authentication failed: that API key was rejected" },
+    ]);
   });
 });
 

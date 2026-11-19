@@ -4,9 +4,13 @@ export {
   agents,
   claude,
   codex,
+  cursor,
+  devin,
+  droid,
   opencode,
 } from "./agents.js";
 export type { AppCommands } from "./app.js";
+export { ChatGPT, type ChatGPTOptions, planAgent } from "./chatgpt.js";
 export { createFrontServer, PREFIX } from "./front.js";
 export { type Host, type VercelOptions, vercel } from "./hosts.js";
 export { createRunnerServer, type ServeOptions, serve } from "./http.js";

@@ -37,6 +37,8 @@ export interface Info {
   waiting?: boolean;
   note?: string;
   ownUrl?: string;
+  /** Present when the app lets people use their own ChatGPT plan: whether this person has connected, and whether they must. */
+  chatgpt?: { connected: boolean; email?: string; required: boolean };
 }
 
 /** Find the runner: the app's own address if the runner is serving it, otherwise this machine. Empty when there is none. */
@@ -86,6 +88,9 @@ export function createClient(options: ClientOptions = {}) {
   return {
     info: () => call<Info>("/"),
     hello: () => call<{ ok: boolean; guest: boolean }>("/hello", {}),
+    /** Begin connecting this person's ChatGPT account. Returns the address to send the browser to. */
+    connectChatGPT: async (path: string) => (await call<{ url: string }>("/chatgpt/start", { path })).url,
+    disconnectChatGPT: () => call<{ revoked: boolean }>("/chatgpt/disconnect", {}),
     /** Say that a request is probably coming, so the runner can get ready for it. */
     warm: () => call<{ ok: boolean }>("/warm", {}),
     view: (version: "main" | "mine") => call<{ ok: boolean }>("/view", { version }),

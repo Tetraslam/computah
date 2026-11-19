@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { LOOPBACK_CALLBACK } from "./chatgpt.js";
 import { cleanContext } from "./http.js";
 import type { Person } from "./identity.js";
 import { RequestError } from "./jobs.js";
@@ -95,6 +96,19 @@ export function createFrontServer(site: Site): Server {
     try {
       person = await site.identify(request);
       const path = new URL(request.url ?? "/", "http://front").pathname;
+      const url = new URL(request.url ?? "/", "http://front");
+      // Coming back from ChatGPT's sign-in. The open-source flow can only return to this fixed path,
+      // which may also be a page of the app, so it's ours only when it carries a sign-in we started.
+      if (
+        request.method === "GET" &&
+        (path === `${PREFIX}/chatgpt/callback` || (path === LOOPBACK_CALLBACK && site.expectsChatGPT(url.searchParams.get("state"))))
+      ) {
+        const { back, connected, problem } = await site.finishChatGPT(url.searchParams);
+        const to = new URL(back);
+        to.searchParams.set("computah-chatgpt", connected ? "connected" : (problem ?? "failed"));
+        response.writeHead(302, { location: to.toString(), "cache-control": "no-store", "referrer-policy": "no-referrer" });
+        return void response.end();
+      }
       if (path === PREFIX || path.startsWith(`${PREFIX}/`)) return await api(site, person, path.slice(PREFIX.length), request, response);
       if (site.pushes) return send(response, 404, { error: "Not found." });
       const { port, local, setCookie } = await route(site, person, request);
@@ -137,6 +151,15 @@ async function api(site: Site, person: Person | null, path: string, request: Inc
     return void response.end(script);
   }
   if (first === "stats" && method === "GET") return send(response, 200, site.stats());
+  if (first === "chatgpt" && method === "POST" && id === "start") {
+    const body = await readJson(request);
+    // The address they're using the app at, which is where the sign-in has to bring them back to.
+    const forwarded = request.headers["x-forwarded-proto"];
+    const scheme = (typeof forwarded === "string" ? forwarded.split(",")[0]?.trim() : undefined) || "http";
+    const origin = request.headers.origin ?? `${scheme}://${request.headers.host ?? "localhost"}`;
+    return send(response, 200, { url: await site.connectChatGPT(person, origin, typeof body.path === "string" ? body.path : "/") });
+  }
+  if (first === "chatgpt" && method === "POST" && id === "disconnect") return send(response, 200, await site.disconnectChatGPT(person));
   if (first === "warm" && method === "POST") {
     site.warm(person);
     return send(response, 200, { ok: true });

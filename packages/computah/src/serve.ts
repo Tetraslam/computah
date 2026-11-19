@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { type AgentName, agents } from "./server/agents.js";
 import type { AppCommands } from "./server/app.js";
+import type { ChatGPTOptions } from "./server/chatgpt.js";
 import { createFrontServer } from "./server/front.js";
 import { exe, type Identity, local, type Trust } from "./server/identity.js";
 import type { Sandbox, WarmOptions } from "./server/sandbox.js";
@@ -33,6 +34,8 @@ export interface Config {
   /** How many times the agent may try to fix a change that doesn't build. Default 3. */
   repairs?: number /** Run the agent in a sandbox: `{ in: exeSandbox() }`, for members only unless `for: "everyone"`. */;
   sandbox?: { in: Sandbox; for?: "members" | "everyone"; warm?: WarmOptions };
+  /** Let people connect their own ChatGPT account, so their requests run on their ChatGPT plan. */
+  chatgpt?: ChatGPTOptions;
   /**
    * Files that each hold one browser-only component importing nothing but react. A version that
    * only changes these isn't built: its pieces are swapped into everyone's build. See `<Piece>`.
@@ -57,10 +60,15 @@ export async function serveSite(argv: string[]): Promise<never> {
   if (!config?.trust?.owners?.length) fail("The config needs `trust.owners`.");
   if (!config.release?.push && !config.app?.start) fail("The config needs `app.start`, or `release.push` if a host serves the app.");
 
+  const binaries: Record<string, string> = { cursor: "cursor-agent" };
   const installed = (command: string) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
-  const name = typeof config.agent === "string" ? config.agent : (["claude", "opencode", "codex"] as const).find(installed);
+  const name =
+    typeof config.agent === "string"
+      ? config.agent
+      : (["claude", "opencode", "codex", "droid", "cursor", "devin"] as const).find((name) => installed(binaries[name] ?? name));
   const agent = typeof config.agent === "object" ? config.agent : name && name in agents ? agents[name]({ model: config.model }) : null;
-  if (!agent) fail("No coding agent found. Install Claude Code, OpenCode or Codex, or set `agent` in the config.");
+  if (!agent)
+    fail("No coding agent found. Install Claude Code, OpenCode, Codex, Droid, Cursor's agent or Devin, or set `agent` in the config.");
 
   const identity = config.identity === "exe" ? exe() : config.identity === "local" ? local() : config.identity;
   if (typeof identity !== "function") fail('`identity` must be "exe", "local" or a function.');
@@ -78,6 +86,7 @@ export async function serveSite(argv: string[]): Promise<never> {
     repairs: config.repairs,
     sandbox: config.sandbox,
     pieces: config.pieces,
+    chatgpt: config.chatgpt,
     guests: config.guests,
     maxCopies: config.maxCopies,
     maxAgents: config.maxAgents,

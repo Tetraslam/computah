@@ -11,7 +11,7 @@ const HELP = `computah: the runner behind the improvements box.
   computah serve [--config computah.config.mjs] [--port 8000]
       serve the app itself, with a version per person (see the README)
 
-  --agent <claude|opencode|codex>  which coding agent makes the changes (default: the first one installed)
+  --agent <name>                   claude, opencode, codex, droid, cursor or devin (default: the first one installed)
   --model <name>                   model to pass to the agent
   --port <number>                  default 4821
   --host <address>                 default 127.0.0.1; anything else needs --secret
@@ -50,13 +50,18 @@ if (values.help) {
   process.exit(0);
 }
 
+// The command each agent is run as, where it differs from its name.
+const binaries: Record<string, string> = { cursor: "cursor-agent" };
 const installed = (command: string) => spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
-const name = (values.agent ?? (["claude", "opencode", "codex"] as const).find(installed)) as AgentName | undefined;
+const name = (values.agent ??
+  (["claude", "opencode", "codex", "droid", "cursor", "devin"] as const).find((name) => installed(binaries[name] ?? name))) as
+  | AgentName
+  | undefined;
 if (!name || !(name in agents)) {
   console.error(
     values.agent
-      ? `Unknown agent "${values.agent}". Use claude, opencode or codex.`
-      : "No coding agent found. Install Claude Code, OpenCode or Codex.",
+      ? `Unknown agent "${values.agent}". Use claude, opencode, codex, droid, cursor or devin.`
+      : "No coding agent found. Install Claude Code, OpenCode, Codex, Droid, Cursor's agent or Devin.",
   );
   process.exit(1);
 }

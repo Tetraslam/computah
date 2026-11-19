@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type AppCommands, AppError, AppProcess, appDir, runStep } from "./app.js";
+import { ChatGPT, type ChatGPTOptions } from "./chatgpt.js";
 import { excludeLocally, gitIdentity, repoRoot, run } from "./git.js";
 import type { Host } from "./hosts.js";
 import {
@@ -65,6 +66,12 @@ export interface SiteOptions {
    * sandboxes only people who aren't owners or trusted; `"everyone"` sandboxes every request.
    */
   sandbox?: { in: Sandbox; for?: "members" | "everyone"; warm?: WarmOptions };
+  /**
+   * Let people connect their own ChatGPT account, so their requests run on their ChatGPT plan
+   * (through Codex) and not on anything you pay for. See `ChatGPTOptions` for the two ways OpenAI
+   * offers this, and which one a hosted app needs.
+   */
+  chatgpt?: ChatGPTOptions;
   /** How long a replaced copy keeps running for pages that are still open on it. Default 2 minutes. */
   lingerMs?: number;
   /**
@@ -134,6 +141,8 @@ export interface Me {
   waiting: boolean;
   /** True for someone not signed in who could take part as a guest by asking. */
   canJoin: boolean;
+  /** Present when this app lets people use their own ChatGPT plan: whether they've connected, and whether they must. */
+  chatgpt?: { connected: boolean; email?: string; required: boolean };
   /** For a member: what they're allowed to change, in the owner's words. */
   note?: string;
   /** "swap" when the runner serves the app itself, "push" when a host does. */
@@ -171,6 +180,7 @@ export class Site {
   /** Compiled pieces by the hash of their source, which is also the name the page asks for. */
   private compiled = new Map<string, string>();
   private sandbox: (Sandbox & { hint?: () => void; stop?: () => Promise<void> }) | undefined;
+  private plans: ChatGPT | undefined;
   /** When each person last had a sandbox readied for them. */
   private hinted = new Map<string, number>();
 
@@ -189,6 +199,7 @@ export class Site {
   async init() {
     this.root = await repoRoot(this.options.cwd);
     await mkdir(join(this.root, DATA), { recursive: true });
+    if (this.options.chatgpt) this.plans = new ChatGPT(join(this.root, DATA, "chatgpt"), this.options.chatgpt);
     await excludeLocally(this.root, `${DATA}/`);
     await this.git(this.root, ["worktree", "prune"]);
     if (!(await this.hasBranch(MAIN))) await this.git(this.root, ["branch", MAIN, "HEAD"]);
@@ -342,6 +353,10 @@ export class Site {
       waiting:
         !!mine && !wantsMain && !this.push && !mine.pieces && (!mine.release || mine.release.process.exited) && !this.isLive(mine, person),
       note: level === "member" ? this.options.trust.memberNote : undefined,
+      chatgpt:
+        this.plans && person && level !== "visitor"
+          ? { ...(await this.plans.status(person)), required: this.plans.requires(level === "member") }
+          : undefined,
       ownUrl: mine?.url,
       proposals,
     };
@@ -353,6 +368,9 @@ export class Site {
     const level = this.level(person);
     if (!person || level === "visitor") throw new RequestError("You can't change this app.", 403);
     const personal = level === "member" || scope === "me";
+    // Where people bring their own ChatGPT plan, nobody who has to gets to spend the owner's money first.
+    if (this.plans?.requires(level === "member") && !(await this.plans.status(person)).connected)
+      throw new RequestError("Connect your ChatGPT account first.", 402);
     if (level === "member") this.count(person);
     const version = personal ? await this.ownVersion(person) : this.main;
     this.hinted.delete(person.id);
@@ -687,6 +705,7 @@ export class Site {
       check: (job, files) => (this.level(job.by ?? null) === "member" ? (this.options.trust.memberCheck?.(files) ?? null) : null),
       onStart: (job) => void this.startLive(version, job),
       sandbox: (job) => this.sandboxFor(job),
+      agentFor: (job) => this.agentFor(job),
       turn: (run) => this.takeTurn(run),
       verify: (job) => this.afterChange(version, job),
       repairs: this.options.repairs,
@@ -713,6 +732,45 @@ export class Site {
       this.agents.running--;
       this.agents.waiting.shift()?.();
     }
+  }
+
+  /** Someone who connected their ChatGPT account has their requests made on their own plan. */
+  private async agentFor(job: Job) {
+    const person = job.by as Person | undefined;
+    if (!this.plans || !person) return undefined;
+    const level = this.level(person);
+    if (level === "visitor") return undefined;
+    const { connected } = await this.plans.status(person);
+    if (!connected) {
+      // Required and gone since they asked (signed out, or revoked at OpenAI): don't fall back to the owner's agent.
+      if (this.plans.requires(level === "member")) throw new RequestError("Connect your ChatGPT account first.", 402);
+      return undefined;
+    }
+    return this.plans.agentFor(person);
+  }
+
+  // ---------- people's own ChatGPT plans ----------
+
+  /** Start connecting this person's ChatGPT account. Returns where to send their browser. */
+  async connectChatGPT(person: Person | null, origin: string, path?: string): Promise<string> {
+    if (!this.plans) throw new RequestError("This app doesn't use ChatGPT accounts.", 404);
+    if (!person || this.level(person) === "visitor") throw new RequestError("You can't change this app.", 403);
+    return this.plans.start(person, origin, path);
+  }
+
+  /** True when a callback's `state` is from a sign-in this runner started. */
+  expectsChatGPT(state: string | null): boolean {
+    return !!this.plans?.expects(state);
+  }
+
+  finishChatGPT(query: URLSearchParams) {
+    if (!this.plans) throw new RequestError("This app doesn't use ChatGPT accounts.", 404);
+    return this.plans.finish(query);
+  }
+
+  async disconnectChatGPT(person: Person | null) {
+    if (!this.plans || !person) throw new RequestError("Nothing to disconnect.", 404);
+    return this.plans.disconnect(person);
   }
 
   private sandboxFor(job: Job): Sandbox | undefined {
