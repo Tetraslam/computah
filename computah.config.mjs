@@ -14,6 +14,8 @@ export default {
   },
   // On exe.dev its proxy says who each visitor is. Anywhere else, only this machine counts as you.
   identity: process.env.COMPUTAH_IDENTITY === "exe" ? "exe" : "local",
+  // Lets people run their requests on their own ChatGPT plan. Off unless asked for.
+  chatgpt: process.env.COMPUTAH_CHATGPT ? {} : undefined,
   trust: {
     owners,
     trusted: (process.env.COMPUTAH_TRUSTED ?? "").split(",").filter(Boolean),
