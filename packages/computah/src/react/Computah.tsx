@@ -205,6 +205,30 @@ export function Computah({
   draftRef.current = draft;
   const live = box.jobs.some((job) => job.state === "queued" || job.state === "working");
 
+  // The size of the page's window, kept current, so a remembered position can be held inside it.
+  const [viewport, setViewport] = useState({ width: 1e6, height: 1e6 });
+  useEffect(() => {
+    const measure = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  // The box grows as requests are added, so its bottom edge is checked against the window whenever either changes size.
+  useEffect(() => {
+    const element = windowRef.current;
+    if (!open || !position || !element) return;
+    const settle = () => {
+      const rect = element.getBoundingClientRect();
+      const over = rect.bottom - (viewport.height - 8);
+      if (over > 0.5 && rect.top > 0) setPosition((at) => (at ? { ...at, y: Math.max(0, Math.min(at.y, rect.top) - over) } : at));
+    };
+    settle();
+    const watching = new ResizeObserver(settle);
+    watching.observe(element);
+    return () => watching.disconnect();
+  }, [open, position, viewport]);
+
   // Mount a shadow root on the body, so the host app's styles and ours never meet.
   useEffect(() => {
     const host = document.createElement("div");
@@ -394,7 +418,16 @@ export function Computah({
   if (box.served && (!box.info || level === "visitor")) return null;
 
   const pickedLabel = picked ? (describeElement(picked).text?.slice(0, 28) ?? picked.tagName.toLowerCase()) : "";
-  const style: CSSProperties | undefined = position ? { left: position.x, top: position.y, bottom: "auto", transform: "none" } : undefined;
+  // Where it was dragged to is remembered, but the window it was dragged in may have been bigger
+  // (or zoomed differently) than this one. It's always pulled back to where it can be seen and reached.
+  const style: CSSProperties | undefined = position
+    ? {
+        left: Math.max(0, Math.min(position.x, viewport.width - Math.min(420, viewport.width - 24))),
+        top: Math.max(0, Math.min(position.y, viewport.height - 120)),
+        bottom: "auto",
+        transform: "none",
+      }
+    : undefined;
   const keys = hotkeyLabel(hotkey, mac);
 
   return createPortal(

@@ -41,13 +41,25 @@ export interface Info {
   chatgpt?: { connected: boolean; email?: string; required: boolean };
 }
 
-/** Find the runner: the app's own address if the runner is serving it, otherwise this machine. Empty when there is none. */
+/**
+ * Find the runner: the app's own address if the runner is serving it, otherwise this machine. Empty when there is none.
+ *
+ * "There is none" has to be a real answer, not a guess: one dropped request on a bad connection,
+ * or a runner that is restarting, would otherwise hide the box until the page is loaded again.
+ * So a failure that says nothing either way is asked again a few times before giving up.
+ */
 export async function findEndpoint(): Promise<string> {
-  try {
-    const response = await fetch(`${SERVED_ENDPOINT}/me`, { cache: "no-store" });
-    if (response.ok && ((await response.json()) as { name?: string }).name === "computah") return SERVED_ENDPOINT;
-  } catch {
-    // Not served by a runner.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const response = await fetch(`${SERVED_ENDPOINT}/me`, { cache: "no-store" });
+      if (response.ok && ((await response.json().catch(() => ({}))) as { name?: string }).name === "computah") return SERVED_ENDPOINT;
+      // An answer that isn't the runner's (the app's own 404, say) means no runner serves this app.
+      if (response.status < 500) break;
+    } catch {
+      // Couldn't reach anything. On this machine that just means nothing serves the app here.
+      if (/^(localhost|127\.0\.0\.1|\[::1\]|.*\.localhost)$/.test(window.location.hostname)) break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 600 * 2 ** attempt));
   }
   // A development runner lives on this machine, so only a page served from this machine looks for one.
   // Anywhere else there is no runner to find, and a visitor's browser shouldn't go poking at their localhost.
