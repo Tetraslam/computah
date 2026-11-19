@@ -578,7 +578,7 @@ describe("more agent adapters", () => {
     expect(agent.parse(`{"type":"result","subtype":"error","is_error":true,"result":"No."}`)).toEqual([{ type: "error", message: "No." }]);
   });
 
-  it("reads devin's plain output, and its errors (the error line is from a real run)", () => {
+  it("reads devin's plain output, and its errors (checked against real runs)", () => {
     const agent = devin();
     expect(agent.command("do it", "/repo").args).toEqual([
       "--permission-mode",

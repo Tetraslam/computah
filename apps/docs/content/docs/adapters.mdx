@@ -26,7 +26,7 @@ the built-ins run the real cli headless in the repo, signed in however you signe
 | `codex` | `codex exec` with json, sandboxed to the workspace | yes |
 | `droid` | `droid exec` with streaming json at `--auto medium` (edits, builds, tests) | yes, a change took 7.5 seconds |
 | `cursor` | `cursor-agent -p` with streaming json, `--force` and `--trust` | yes, 12.9 seconds |
-| `devin` | `devin -p` allowed to edit the workspace | not yet. devin prints plain text and not events, so the box shows what it says and none of the steps in between |
+| `devin` | `devin -p` allowed to edit the workspace | yes, 6 seconds. devin prints plain text and not events, so the box shows what it says and none of the steps in between |
 
 one thing about cursor that's kind of annoying: their docs tell you to use that command for scripts and ci, and their acceptable use policy also bans "accessing the service through automated or non-human means, whether through a bot, script, or otherwise". i think that second one is about scrapers and not about their own cli doing what its docs say, but it's your account, so that's yours to weigh
 
