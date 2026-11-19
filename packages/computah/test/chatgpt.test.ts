@@ -29,6 +29,7 @@ let fake: {
   refresh: Map<string, { client: string; sub: string }>;
   revoked: string[];
   refreshes: number;
+  modelAsks: number;
   /** Change how the next ID token is made, to forge one. */
   tamper: { key?: typeof keys.privateKey; iss?: string; aud?: string; nonce?: string };
   expiresIn: number;
@@ -43,7 +44,7 @@ const sign = (claims: Record<string, unknown>, key = keys.privateKey) => {
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "computah-chatgpt-"));
-  fake = { codes: new Map(), refresh: new Map(), revoked: [], refreshes: 0, tamper: {}, expiresIn: 3600 };
+  fake = { codes: new Map(), refresh: new Map(), revoked: [], refreshes: 0, modelAsks: 0, tamper: {}, expiresIn: 3600 };
   server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", issuer);
     const json = (status: number, body: unknown) => {
@@ -62,6 +63,16 @@ beforeEach(async () => {
         revocation_endpoint: `${issuer}/revoke`,
       });
     if (url.pathname === "/jwks") return json(200, { keys: [jwk] });
+    if (url.pathname === "/v1/models") {
+      fake.modelAsks++;
+      return json(200, {
+        models: [
+          { slug: "hidden-one", visibility: "hide" },
+          { slug: "best-model", visibility: "list" },
+          { slug: "older-model", visibility: "list" },
+        ],
+      });
+    }
     if (url.pathname === "/revoke") {
       fake.revoked.push(form.get("token") ?? "");
       return json(200, {});
@@ -298,6 +309,13 @@ describe("connecting a ChatGPT account, the open-source way", () => {
     expect(line).toContain("model_providers.computah_chatgpt_plan.requires_openai_auth=false");
     expect(line).toContain("--model gpt-x");
     expect(line).not.toContain("a-ann-sub-0");
+    // With no model configured, it uses the first one their account lists for display, and asks once, not per request.
+    const open = new ChatGPT(dir, { issuer, api: `${issuer}/v1` });
+    const first = (await open.agentFor(ann)).agent.command("do it", "/repo").args.join(" ");
+    expect(first).toContain("--model best-model");
+    expect(first).toContain(`base_url="${issuer}/v1"`);
+    await open.agentFor(ann);
+    expect(fake.modelAsks).toBe(1);
     // Errors a person can act on are said in words.
     const said = planAgent().parse(
       JSON.stringify({ type: "turn.failed", error: { message: "429 subscription_sharing_usage_limit_exceeded" } }),
@@ -342,7 +360,7 @@ describe("an app where people bring their own ChatGPT plan", () => {
       app: { start: "node server.js" },
       identity: header("x-user"),
       trust: { owners: ["olive"], members: ["mel"] },
-      chatgpt: { issuer, require: "members", command: pretend },
+      chatgpt: { issuer, api: `${issuer}/v1`, require: "members", command: pretend },
     });
     await site.init();
     const front = createFrontServer(site);
@@ -397,6 +415,7 @@ describe("an app where people bring their own ChatGPT plan", () => {
       const [token, args] = readFileSync(seen, "utf8").split("\n");
       expect(token).toBe("a-mel-sub-0");
       expect(args).toContain("computah_chatgpt_plan");
+      expect(args).toContain("--model best-model");
       expect(args).not.toContain("a-mel-sub-0");
 
       // The owner doesn't have to connect, and their requests still go to the app's own agent.

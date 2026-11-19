@@ -30,7 +30,11 @@ export interface ChatGPTOptions {
   redirectUri?: string;
   /** What the person sees this app called when they approve it. Default "computah". */
   appName?: string;
-  /** The model their requests use. Default: Codex's own default. */
+  /**
+   * The model their requests use. Default: the first one OpenAI lists for that person's account,
+   * which is its current best. Whatever Codex is configured with on the runner isn't used, since
+   * it may not be a model their plan offers.
+   */
   model?: string;
   /**
    * Who has to connect before they may send a request: "members" (people who aren't owners or
@@ -44,6 +48,8 @@ export interface ChatGPTOptions {
   command?: string;
   /** OpenAI's issuer. Only tests change this. */
   issuer?: string;
+  /** OpenAI's API. Only tests change this. */
+  api?: string;
 }
 
 const ISSUER = "https://auth.openai.com";
@@ -111,6 +117,8 @@ export class ChatGPT {
   private endpoints: Promise<Endpoints> | null = null;
   private keys: { at: number; list: Record<string, unknown>[] } | null = null;
   private host: Promise<string> | null = null;
+  /** The model picked for each person, and when, so the list isn't asked for on every request. */
+  private picked = new Map<string, { model: string; at: number }>();
 
   constructor(
     /** Where connections are kept. Each is a file only this user can read. */
@@ -445,10 +453,31 @@ export class ChatGPT {
     throw new RequestError("Couldn't reach ChatGPT to renew your sign-in. Try again in a moment.", 503);
   }
 
+  /** The model for this person: the one configured, or the first their account lists. Undefined if the list can't be had. */
+  private async modelFor(person: Person, token: string): Promise<string | undefined> {
+    if (this.options.model) return this.options.model;
+    const known = this.picked.get(person.id);
+    if (known && Date.now() - known.at < 60 * 60_000) return known.model;
+    try {
+      const response = await fetch(`${(this.options.api ?? RESOURCE).replace(/\/+$/, "")}/models`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return known?.model;
+      const { models } = (await response.json()) as { models?: { slug?: string; visibility?: string }[] };
+      // OpenAI lists them best first. The ones marked for display are the ones a person would choose from.
+      const model = models?.find((entry) => entry.visibility === "list" && typeof entry.slug === "string")?.slug;
+      if (model) this.picked.set(person.id, { model, at: Date.now() });
+      return model ?? known?.model;
+    } catch {
+      return known?.model;
+    }
+  }
+
   /** The agent for this person's requests: Codex, on their ChatGPT plan. */
   async agentFor(person: Person): Promise<{ agent: Agent; env: Record<string, string> }> {
     const token = await this.access(person);
-    return { agent: planAgent(this.options.model, this.options.command), env: { COMPUTAH_CHATGPT_TOKEN: token } };
+    const model = await this.modelFor(person, token);
+    return { agent: planAgent(model, this.options.command, this.options.api), env: { COMPUTAH_CHATGPT_TOKEN: token } };
   }
 
   /** Sign this person out: end the session at OpenAI and forget their tokens. Says whether OpenAI confirmed it. */
@@ -482,7 +511,7 @@ export class ChatGPT {
  * Codex pointed at a person's ChatGPT plan, the way OpenAI documents it: a provider that sends
  * their sign-in's access token, read from the environment, with no Codex login of its own.
  */
-export function planAgent(model?: string, command?: string): Agent {
+export function planAgent(model?: string, command?: string, api: string = RESOURCE): Agent {
   const provider = "computah_chatgpt_plan";
   const set = (key: string, value: string) => ["-c", `${key}=${value}`];
   const agent = codex({
@@ -490,7 +519,7 @@ export function planAgent(model?: string, command?: string): Agent {
     args: [
       ...set("model_provider", `"${provider}"`),
       ...set(`model_providers.${provider}.name`, '"ChatGPT plan"'),
-      ...set(`model_providers.${provider}.base_url`, `"${RESOURCE}"`),
+      ...set(`model_providers.${provider}.base_url`, `"${api}"`),
       ...set(`model_providers.${provider}.env_key`, '"COMPUTAH_CHATGPT_TOKEN"'),
       ...set(`model_providers.${provider}.wire_api`, '"responses"'),
       ...set(`model_providers.${provider}.requires_openai_auth`, "false"),
@@ -515,6 +544,11 @@ export function planAgent(model?: string, command?: string): Agent {
           return {
             type: "error" as const,
             message: "Your ChatGPT account can't be used in other apps (its plan or workspace doesn't allow it).",
+          };
+        if (/model is not supported|model_not_found/i.test(event.message))
+          return {
+            type: "error" as const,
+            message: `Your ChatGPT plan doesn't offer the model this app asked for${model ? ` (${model})` : ""}.`,
           };
         if (/subscription_sharing_invalid_user|401 Unauthorized/.test(event.message))
           return { type: "error" as const, message: "ChatGPT didn't accept your sign-in. Connect it again." };
